@@ -8,9 +8,9 @@ let io;
 const init = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' 
+      origin: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' 
         ? 'https://your-production-domain.com' 
-        : 'http://localhost:5173',
+        : 'http://localhost:5173'),
       credentials: true,
     }
   });
