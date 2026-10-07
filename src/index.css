@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-white antialiased font-sans;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply bg-slate-900 border border-slate-800 rounded-3xl shadow-lg;
+  }
+  
+  .glass-card {
+    @apply bg-slate-900/80 backdrop-blur border border-slate-800 rounded-3xl shadow-lg;
+  }
+
+  .interactive-card {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:border-blue-500/50 hover:shadow-blue-500/10 hover:shadow-xl;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-blue-500 text-white rounded-xl font-medium transition-all duration-300 hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-500/25;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-slate-800 text-white rounded-xl font-medium transition-all duration-300 hover:bg-slate-700 border border-slate-700 hover:border-slate-600;
+  }
+
+  .section-container {
+    @apply max-w-7xl mx-auto px-6 py-20 gap-6;
+  }
+}
