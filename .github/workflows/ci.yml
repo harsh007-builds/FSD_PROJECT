@@ -32,7 +32,27 @@ jobs:
         working-directory: ./server
         run: npm ci
 
-      # We don't have explicit tests written yet, but we can verify that the backend syntax is valid
-      - name: Validate Backend (Syntax Check)
+      - name: Validate Backend Syntax
         working-directory: ./server
-        run: node -e "require('./src/index.js')" & sleep 5 && kill $!
+        run: node -e "
+          try {
+            require('./src/config/db');
+            require('./src/middleware/authMiddleware');
+            require('./src/middleware/errorMiddleware');
+            require('./src/models/User');
+            require('./src/models/Project');
+            require('./src/models/Task');
+            require('./src/models/Activity');
+            require('./src/models/Notification');
+            require('./src/models/Invitation');
+            require('./src/models/Message');
+            require('./src/models/Note');
+            require('./src/models/Resource');
+            require('./src/models/Session');
+            require('./src/socket');
+            console.log('All backend modules loaded successfully');
+          } catch (e) {
+            console.error('Backend validation failed:', e.message);
+            process.exit(1);
+          }
+        "
