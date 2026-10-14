@@ -1,8 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BookOpen, Menu, X, LogOut, Bell, LayoutDashboard, KanbanSquare, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  BookOpen, Menu, X, LogOut, Bell, Mail, 
+  LayoutDashboard, KanbanSquare, Calendar, Search, CheckSquare 
+} from 'lucide-react';
 import { useUser } from '../context/UserContext';
-import { notificationService } from '../services/api';
+import { notificationService, invitationService } from '../services/api';
 import { useSocket } from '../context/SocketContext';
+import { useRouter } from '../context/RouterContext';
+import UserInvitationsModal from './UserInvitationsModal';
+import NotificationCenterModal from './NotificationCenterModal';
+import GlobalSearchModal from './GlobalSearchModal';
 
 const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -10,53 +17,73 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
   const socketContext = useSocket();
   const isConnected = socketContext?.isConnected;
 
+  // Global search modal state
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+
   // Notification state
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notifRef = useRef(null);
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
 
-  const fetchNotifications = useCallback(async () => {
+  // Invitations state
+  const [pendingInviteCount, setPendingInviteCount] = useState(0);
+  const [showInvitationsModal, setShowInvitationsModal] = useState(false);
+
+  // Router navigation
+  const { navigate, navigateToProject } = useRouter();
+
+  // Global keyboard shortcut listener (Ctrl+K, Cmd+K, '/')
+  useEffect(() => {
+    if (!user) return;
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen(prev => !prev);
+        return;
+      }
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        setIsSearchModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [user]);
+
+  const fetchNotificationsAndInvites = useCallback(async () => {
     if (!user) return;
     try {
-      const [notifs, countData] = await Promise.all([
-        notificationService.getNotifications(),
-        notificationService.getUnreadCount(),
+      const [notifs, countData, invites] = await Promise.all([
+        notificationService.getNotifications().catch(() => []),
+        notificationService.getUnreadCount().catch(() => ({ count: 0 })),
+        invitationService.getMyInvitations().catch(() => []),
       ]);
       setNotifications(notifs);
       setUnreadCount(countData.count);
+      setPendingInviteCount((invites || []).length);
     } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      console.error('Failed to fetch notifications/invites:', err);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchNotifications();
-    // Poll every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
+    fetchNotificationsAndInvites();
+    // Poll every 30 seconds as fallback
+    const interval = setInterval(fetchNotificationsAndInvites, 30000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotificationsAndInvites]);
 
-  // Close dropdown on outside click
+  // Real-time socket notifications
+  const socket = socketContext?.socket;
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
-        setShowNotifications(false);
-      }
+    if (!socket) return;
+    const handleNewNotif = (newNotif) => {
+      setNotifications(prev => [newNotif, ...prev]);
+      setUnreadCount(prev => prev + 1);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleMarkAllRead = async () => {
-    try {
-      await notificationService.markAllAsRead();
-      setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch (err) {
-      console.error('Failed to mark notifications as read:', err);
-    }
-  };
+    socket.on('notification:new', handleNewNotif);
+    return () => socket.off('notification:new', handleNewNotif);
+  }, [socket]);
 
   const handleNav = (view, e) => {
     e.preventDefault();
@@ -64,16 +91,9 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
     setIsMobileMenuOpen(false);
   };
 
-  const timeAgo = (date) => {
-    const diff = (Date.now() - new Date(date).getTime()) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { key: 'tasks', label: 'My Tasks', icon: CheckSquare },
     { key: 'board', label: 'Board', icon: KanbanSquare },
     { key: 'calendar', label: 'Calendar', icon: Calendar },
   ];
@@ -126,55 +146,46 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
         <div className="flex items-center gap-3">
           {user ? (
             <div className="hidden md:flex items-center gap-3">
-              {/* Notification Bell */}
-              <div className="relative" ref={notifRef}>
-                <button 
-                  onClick={() => {
-                    setShowNotifications(!showNotifications);
-                    if (!showNotifications) fetchNotifications();
-                  }}
-                  className="relative p-2 text-slate-400 hover:text-white transition-colors bg-slate-900 rounded-full border border-slate-800"
-                  title="Notifications"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
+              {/* Search Trigger Button */}
+              <button
+                onClick={() => setIsSearchModalOpen(true)}
+                className="flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-400 bg-slate-900 hover:bg-slate-850 hover:text-slate-200 rounded-full border border-slate-800 transition-colors shadow-sm"
+                title="Global Search (Ctrl + K)"
+              >
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden lg:inline text-slate-400">Search...</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono text-[10px] text-slate-400">
+                  ⌘K
+                </kbd>
+              </button>
 
-                {/* Notification Dropdown */}
-                {showNotifications && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl shadow-black/30 overflow-hidden z-50">
-                    <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-white">Notifications</h3>
-                      {unreadCount > 0 && (
-                        <button onClick={handleMarkAllRead} className="text-xs text-blue-400 hover:text-blue-300">
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-6 text-center text-sm text-slate-500">
-                          No notifications yet
-                        </div>
-                      ) : (
-                        notifications.slice(0, 15).map(n => (
-                          <div 
-                            key={n._id} 
-                            className={`p-3 border-b border-slate-800/30 hover:bg-slate-800/30 transition-colors ${!n.read ? 'bg-blue-500/5' : ''}`}
-                          >
-                            <p className="text-sm text-slate-300">{n.message}</p>
-                            <span className="text-xs text-slate-500 mt-1 block">{timeAgo(n.createdAt)}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+              {/* Invitations Button */}
+              <button 
+                onClick={() => setShowInvitationsModal(true)}
+                className="relative p-2 text-slate-400 hover:text-white transition-colors bg-slate-900 rounded-full border border-slate-800"
+                title="Project Invitations"
+              >
+                <Mail className="w-5 h-5" />
+                {pendingInviteCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                    {pendingInviteCount > 9 ? '9+' : pendingInviteCount}
+                  </span>
                 )}
-              </div>
+              </button>
+
+              {/* Notification Bell */}
+              <button 
+                onClick={() => setShowNotificationCenter(true)}
+                className="relative p-2 text-slate-400 hover:text-white transition-colors bg-slate-900 rounded-full border border-slate-800"
+                title="Open Notification Center"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
 
               {/* Connection Status */}
               {socketContext !== undefined && (
@@ -220,6 +231,18 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
               </button>
             </div>
           )}
+
+          {/* Search trigger on mobile */}
+          {user && (
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
+              title="Search workspace"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+          )}
+
           <button 
             className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -232,7 +255,7 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
       {/* Mobile Menu */}
       <div 
         className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out bg-slate-900 border-b border-slate-800 ${
-          isMobileMenuOpen ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0 border-transparent'
+          isMobileMenuOpen ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0 border-transparent'
         }`}
       >
         <div className="px-6 py-4 flex flex-col gap-3">
@@ -250,6 +273,32 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
                   {tab.label}
                 </button>
               ))}
+              <button
+                onClick={() => { setShowNotificationCenter(true); setIsMobileMenuOpen(false); }}
+                className="flex items-center justify-between text-left py-2 text-sm font-medium text-slate-400 hover:text-white"
+              >
+                <span className="flex items-center gap-3">
+                  <Bell className="w-4 h-4 text-blue-400" /> Notifications
+                </span>
+                {unreadCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setShowInvitationsModal(true); setIsMobileMenuOpen(false); }}
+                className="flex items-center justify-between text-left py-2 text-sm font-medium text-slate-400 hover:text-white"
+              >
+                <span className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-blue-400" /> Invitations
+                </span>
+                {pendingInviteCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold">
+                    {pendingInviteCount}
+                  </span>
+                )}
+              </button>
               <button 
                 onClick={() => { logout(); setIsMobileMenuOpen(false); }}
                 className="text-red-400 hover:text-red-300 transition-colors font-medium text-sm text-left mt-2"
@@ -276,6 +325,51 @@ const Navbar = ({ onViewChange, activeTab, onTabChange, isLoggedIn }) => {
           )}
         </div>
       </div>
+
+      {/* Global Search Palette Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onNavigateToProject={(projId) => {
+          if (navigateToProject) {
+            navigateToProject(projId);
+          } else if (navigate) {
+            navigate(`/projects/${projId}`);
+          } else if (onTabChange) {
+            onTabChange('board');
+          }
+        }}
+      />
+
+      {/* Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={showNotificationCenter}
+        onClose={() => setShowNotificationCenter(false)}
+        onNavigateToProject={(projId) => {
+          if (navigateToProject) {
+            navigateToProject(projId);
+          } else if (navigate) {
+            navigate(`/projects/${projId}`);
+          } else if (onTabChange) {
+            onTabChange('board');
+          }
+        }}
+        onOpenInvitations={() => setShowInvitationsModal(true)}
+        onNotificationsUpdated={(updatedNotifs, count) => {
+          setNotifications(updatedNotifs);
+          setUnreadCount(count);
+        }}
+      />
+
+      {/* User Invitations Modal */}
+      <UserInvitationsModal
+        isOpen={showInvitationsModal}
+        onClose={() => setShowInvitationsModal(false)}
+        onInvitationAccepted={() => {
+          fetchNotificationsAndInvites();
+          if (onTabChange) onTabChange('board');
+        }}
+      />
     </nav>
   );
 };

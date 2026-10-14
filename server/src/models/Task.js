@@ -22,6 +22,11 @@ const taskSchema = new mongoose.Schema(
       enum: ['Low', 'Medium', 'High', 'Urgent'],
       default: 'Medium',
     },
+    type: {
+      type: String,
+      enum: ['Task', 'Milestone', 'Study Session'],
+      default: 'Task',
+    },
     status: {
       type: String,
       enum: ['Backlog', 'Todo', 'In Progress', 'Review', 'Completed'],
@@ -42,11 +47,39 @@ const taskSchema = new mongoose.Schema(
       type: String,
       trim: true,
     }],
+    order: {
+      type: Number,
+      default: 0,
+    },
+    comments: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        text: {
+          type: String,
+          required: [true, 'Comment text is required'],
+          trim: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt
   }
 );
+
+taskSchema.index({ project: 1, status: 1 });
+taskSchema.index({ project: 1, assignee: 1 });
+taskSchema.index({ project: 1, dueDate: 1 });
+taskSchema.index({ title: 'text', description: 'text', labels: 'text' });
+taskSchema.index({ assignee: 1, status: 1 });
 
 const Task = mongoose.model('Task', taskSchema);
 

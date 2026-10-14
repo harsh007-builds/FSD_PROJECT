@@ -39,6 +39,9 @@ const init = (httpServer) => {
 
   io.on('connection', (socket) => {
     console.log(`User connected to socket: ${socket.user._id}`);
+    
+    // Join personal user room for direct notifications
+    socket.join(`user_${socket.user._id}`);
 
     // Join project room
     socket.on('join_project', async (projectId) => {

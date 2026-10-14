@@ -79,12 +79,48 @@ const loginUser = async (req, res, next) => {
   }
 };
 
-// @desc    Get user data
+// @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
 const getMe = async (req, res, next) => {
   try {
-    res.status(200).json(req.user);
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+    res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      avatarInitials: user.avatarInitials,
+      role: user.role,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Search registered users by name or email
+// @route   GET /api/auth/users/search?q=...
+// @access  Private
+const searchUsers = async (req, res, next) => {
+  try {
+    const q = req.query.q ? req.query.q.trim() : '';
+    if (!q || q.length < 2) {
+      return res.status(200).json([]);
+    }
+
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const users = await User.find({
+      $or: [{ name: regex }, { email: regex }],
+      _id: { $ne: req.user._id },
+    })
+      .select('name email avatarInitials')
+      .limit(10)
+      .lean();
+
+    res.status(200).json(users);
   } catch (error) {
     next(error);
   }
@@ -94,4 +130,5 @@ module.exports = {
   registerUser,
   loginUser,
   getMe,
+  searchUsers,
 };

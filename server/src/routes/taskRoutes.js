@@ -6,11 +6,17 @@ const {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  addComment,
+  deleteComment,
 } = require('../controllers/taskController');
 const validateObjectId = require('../middleware/validateObjectId');
 const { protect } = require('../middleware/authMiddleware');
+const { getMyTasks } = require('../controllers/searchController');
 
-// Get all tasks (might not be used much if we get by project, but protected anyway)
+// My Tasks view
+router.get('/my-tasks', protect, getMyTasks);
+
+// Get all tasks
 router.route('/')
   .get(protect, getAllTasks);
 
@@ -22,6 +28,13 @@ router.route('/:id')
 
 router.route('/:id/status')
   .patch(protect, validateObjectId, updateTaskStatus)
-  .put(protect, validateObjectId, updateTaskStatus); // Support PUT as requested in phase instructions
+  .put(protect, validateObjectId, updateTaskStatus);
+
+// Comments architecture
+router.route('/:id/comments')
+  .post(protect, validateObjectId, addComment);
+
+router.route('/:id/comments/:commentId')
+  .delete(protect, validateObjectId, deleteComment);
 
 module.exports = router;

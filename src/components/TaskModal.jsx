@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, CheckSquare, BookOpen, Flag } from 'lucide-react';
+import { toDateKey, fromInputDateToIso } from '../utils/dateUtils';
 
-const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, projects = [] }) => {
+const TaskModal = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  initialData, 
+  initialDate, 
+  initialType = 'Task',
+  activeProject, 
+  projects = [] 
+}) => {
   const [formData, setFormData] = useState({
     task: '',
     description: '',
+    type: 'Task',
     priority: 'Medium',
     status: 'Todo',
     assignee: '',
@@ -21,12 +32,13 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
     if (isOpen) {
       if (initialData) {
         setFormData({
-          task: initialData.task || '',
+          task: initialData.task || initialData.title || '',
           description: initialData.description || '',
+          type: initialData.type || 'Task',
           priority: initialData.priority || 'Medium',
           status: initialData.status || 'Todo',
           assignee: initialData.assignee?._id || initialData.assignee || '',
-          dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
+          dueDate: initialData.dueDate ? toDateKey(initialData.dueDate) : '',
           projectId: initialData.projectId || activeProject?.id || '',
           labels: (initialData.labels || []).join(', ')
         });
@@ -34,18 +46,19 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
         setFormData({
           task: '',
           description: '',
+          type: initialType || 'Task',
           priority: 'Medium',
           status: 'Todo',
           assignee: '',
-          dueDate: '',
+          dueDate: initialDate || '',
           projectId: activeProject?.id || '',
-          labels: ''
+          labels: initialType === 'Study Session' ? 'study-session' : ''
         });
       }
       setError('');
       setIsSubmitting(false);
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, initialDate, initialType, activeProject]);
 
   if (!isOpen) return null;
 
@@ -53,14 +66,14 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
     e.preventDefault();
     
     if (!formData.task.trim()) {
-      setError('Task title is required.');
+      setError('Title is required.');
       return;
     }
 
     const finalProjectId = initialData?.projectId || activeProject?.id || formData.projectId;
 
     if (!finalProjectId) {
-      setError('Please select a project for this task.');
+      setError('Please select a project.');
       return;
     }
 
@@ -70,6 +83,7 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
     try {
       await onSubmit({
         ...formData,
+        dueDate: formData.dueDate ? fromInputDateToIso(formData.dueDate) : null,
         labels: formData.labels ? formData.labels.split(',').map(l => l.trim()).filter(Boolean) : [],
         projectId: finalProjectId,
         id: initialData?.id
@@ -121,10 +135,46 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Event Type Selector */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              Event Type
+            </label>
+            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
+              {[
+                { id: 'Task', label: 'Task', icon: CheckSquare },
+                { id: 'Study Session', label: 'Study Session', icon: BookOpen },
+                { id: 'Milestone', label: 'Milestone', icon: Flag },
+              ].map(t => {
+                const Icon = t.icon;
+                const isSelected = formData.type === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, type: t.id }))}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all ${
+                      isSelected
+                        ? t.id === 'Study Session'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
+                          : t.id === 'Milestone'
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm'
+                            : 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span className="truncate">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Title */}
           <div>
             <label htmlFor="task" className="block text-sm font-medium text-slate-300 mb-1.5">
-              Task Title <span className="text-red-400">*</span>
+              {formData.type === 'Study Session' ? 'Session Title' : formData.type === 'Milestone' ? 'Milestone Title' : 'Task Title'} <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -133,7 +183,13 @@ const TaskModal = ({ isOpen, onClose, onSubmit, initialData, activeProject, proj
               value={formData.task}
               onChange={handleChange}
               disabled={isSubmitting}
-              placeholder="e.g., Design Database Schema"
+              placeholder={
+                formData.type === 'Study Session' 
+                  ? "e.g., Algorithms & Data Structures Prep" 
+                  : formData.type === 'Milestone' 
+                    ? "e.g., Midterm Project Submission" 
+                    : "e.g., Design Database Schema"
+              }
               className={`w-full bg-slate-950 border ${error ? 'border-red-500/50' : 'border-slate-800'} rounded-lg px-4 py-2.5 text-white placeholder:text-slate-600 disabled:opacity-50 focus:outline-none focus:border-blue-500/50 transition-colors`}
               autoFocus
             />

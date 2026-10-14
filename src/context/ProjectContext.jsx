@@ -51,7 +51,13 @@ const projectReducer = (state, action) => {
       return {
         ...state,
         tasks: state.tasks.map(task => 
-          task.id === action.payload.id ? { ...task, status: action.payload.status } : task
+          task.id === action.payload.id 
+            ? { 
+                ...task, 
+                status: action.payload.status,
+                ...(action.payload.order !== undefined ? { order: action.payload.order } : {})
+              } 
+            : task
         )
       };
       
