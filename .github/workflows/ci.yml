@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install Frontend Dependencies
@@ -34,25 +34,41 @@ jobs:
 
       - name: Validate Backend Syntax
         working-directory: ./server
-        run: node -e "
-          try {
-            require('./src/config/db');
-            require('./src/middleware/authMiddleware');
-            require('./src/middleware/errorMiddleware');
-            require('./src/models/User');
-            require('./src/models/Project');
-            require('./src/models/Task');
-            require('./src/models/Activity');
-            require('./src/models/Notification');
-            require('./src/models/Invitation');
-            require('./src/models/Message');
-            require('./src/models/Note');
-            require('./src/models/Resource');
-            require('./src/models/Session');
-            require('./src/socket');
-            console.log('All backend modules loaded successfully');
-          } catch (e) {
-            console.error('Backend validation failed:', e.message);
-            process.exit(1);
-          }
-        "
+        run: |
+          node -e "
+            try {
+              require('./src/config/db');
+              require('./src/middleware/authMiddleware');
+              require('./src/middleware/errorMiddleware');
+              require('./src/models/User');
+              require('./src/models/Project');
+              require('./src/models/Task');
+              require('./src/models/Activity');
+              require('./src/models/Notification');
+              require('./src/models/Invitation');
+              require('./src/models/Message');
+              require('./src/models/Note');
+              require('./src/models/Resource');
+              require('./src/models/Session');
+              require('./src/socket');
+              console.log('All backend modules loaded successfully');
+            } catch (e) {
+              console.error('Backend validation failed:', e.message);
+              process.exit(1);
+            }
+          "
+
+      # ----------------------------------------------------
+      # Experiment 10: Docker Integration & Validation Steps
+      # ----------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config
+
+      - name: Build Backend Docker Image
+        run: docker build -t studysync-backend:ci ./server
+
+      - name: Build Frontend Docker Image
+        run: docker build -t studysync-frontend:ci .

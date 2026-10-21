@@ -5,12 +5,20 @@ const Project = require('./models/Project');
 
 let io;
 
+const getAllowedOrigins = () => {
+  if (process.env.FRONTEND_URL) {
+    const list = process.env.FRONTEND_URL.split(',').map(s => s.trim()).filter(Boolean);
+    return list.length === 1 ? list[0] : list;
+  }
+  return process.env.NODE_ENV === 'production' 
+    ? 'https://your-production-domain.com' 
+    : ['http://localhost:5173', 'http://localhost:3000'];
+};
+
 const init = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-domain.com' 
-        : 'http://localhost:5173'),
+      origin: getAllowedOrigins(),
       credentials: true,
     }
   });

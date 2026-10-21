@@ -31,5 +31,5 @@ server/.env.*
 uploads/
 server/uploads/
 
-
 .vercel
+docker-compose.override.yml

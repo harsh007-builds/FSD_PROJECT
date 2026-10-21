@@ -1,0 +1,96 @@
+# ==============================================================
+# Phase 3 & 4: Docker Compose Orchestration for StudySync Full-Stack
+# Frontend (Vite/React + Nginx) + Backend (Express/Node) + MongoDB
+# ==============================================================
+
+services:
+  # ------------------------------------------------------------
+  # Frontend Web Service
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_SOCKET_URL: /
+    container_name: studysync-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - studysync-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ------------------------------------------------------------
+  # Backend API Service
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: studysync-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/studysync}
+      JWT_SECRET: ${JWT_SECRET:-supersecretstudysynckey12345}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:5173}
+    networks:
+      - studysync-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ------------------------------------------------------------
+  # Local Database Service with Persistent Volume
+  # ------------------------------------------------------------
+  mongodb:
+    image: mongo:7.0
+    container_name: studysync-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: studysync
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - studysync-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+# --------------------------------------------------------------
+# Isolated Bridge Network
+# --------------------------------------------------------------
+networks:
+  studysync-network:
+    driver: bridge
+
+# --------------------------------------------------------------
+# Persistent Volumes
+# --------------------------------------------------------------
+volumes:
+  mongo_data:
+    driver: local

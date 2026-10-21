@@ -16,10 +16,18 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' 
+const getAllowedOrigins = () => {
+  if (process.env.FRONTEND_URL) {
+    const list = process.env.FRONTEND_URL.split(',').map(s => s.trim()).filter(Boolean);
+    return list.length === 1 ? list[0] : list;
+  }
+  return process.env.NODE_ENV === 'production' 
     ? 'https://your-production-domain.com' 
-    : 'http://localhost:5173'),
+    : ['http://localhost:5173', 'http://localhost:3000'];
+};
+
+app.use(cors({
+  origin: getAllowedOrigins(),
   credentials: true,
 }));
 app.use(express.json());
