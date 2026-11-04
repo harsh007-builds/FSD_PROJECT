@@ -130,6 +130,24 @@ const ProjectWorkspace = ({
   const socketContext = useSocket();
   const socket = socketContext?.socket || socketContext?.socketService?.socket || socketContext?.socketService;
 
+  const fetchWorkspaceData = useCallback(async () => {
+    if (!projectId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await projectService.getWorkspaceData(projectId);
+      setData(res);
+    } catch (err) {
+      setError(err.message || 'Failed to load workspace');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchWorkspaceData();
+  }, [fetchWorkspaceData]);
+
   // Phase 8 Discussions Unread Count
   useEffect(() => {
     if (!projectId) return;
@@ -226,24 +244,6 @@ const ProjectWorkspace = ({
       onTabChange(tabId);
     }
   };
-
-  const fetchWorkspaceData = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await projectService.getWorkspaceData(projectId);
-      setData(res);
-    } catch (err) {
-      setError(err.message || 'Failed to load workspace');
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchWorkspaceData();
-  }, [fetchWorkspaceData]);
 
   // Tasks belonging to this project
   const projectTasks = useMemo(() => {

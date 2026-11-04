@@ -49,17 +49,16 @@ const DashboardPreview = () => {
   // Sync route URL with active project
   useEffect(() => {
     if (urlProjectId && urlProjectId !== activeProjectId) {
-      const exists = projects.some(p => p.id === urlProjectId);
-      if (exists) {
-        setActiveProject(urlProjectId);
-        setGlobalFilter(null);
-      }
+      setActiveProject(urlProjectId);
+      setGlobalFilter(null);
     }
-  }, [urlProjectId, activeProjectId, projects, setActiveProject]);
+  }, [urlProjectId, activeProjectId, setActiveProject]);
+
+  const currentProjectId = activeProjectId || urlProjectId;
 
   const activeProject = useMemo(() => {
-    return projects.find(p => p.id === activeProjectId) || null;
-  }, [projects, activeProjectId]);
+    return projects.find(p => p.id === currentProjectId) || null;
+  }, [projects, currentProjectId]);
 
   // Filter projects by active vs archived
   const displayProjects = useMemo(() => {
@@ -351,11 +350,11 @@ const DashboardPreview = () => {
             <div className="flex items-center justify-center h-full p-6">
               <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
             </div>
-          ) : activeProjectId ? (
+          ) : currentProjectId ? (
             <ProjectWorkspace 
-              projectId={activeProjectId} 
+              projectId={currentProjectId} 
               initialTab={urlTab || 'overview'}
-              onTabChange={(tab) => navigateToProject(activeProjectId, tab)}
+              onTabChange={(tab) => navigateToProject(currentProjectId, tab)}
               onClose={handleCloseWorkspace} 
               onEditProject={(p) => { setEditingProject(p); setIsProjectModalOpen(true); }}
               onAddMember={addMember}
