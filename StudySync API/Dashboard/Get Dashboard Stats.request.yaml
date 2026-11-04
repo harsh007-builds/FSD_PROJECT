@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get aggregated dashboard statistics for the authenticated user.
+url: "{{baseUrl}}/api/dashboard/stats"
+method: GET
+order: 1000

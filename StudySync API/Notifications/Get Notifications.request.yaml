@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get all notifications for the authenticated user.
+url: "{{baseUrl}}/api/notifications"
+method: GET
+order: 1000

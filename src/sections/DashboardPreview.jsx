@@ -358,7 +358,7 @@ const DashboardPreview = () => {
               onTabChange={(tab) => navigateToProject(activeProjectId, tab)}
               onClose={handleCloseWorkspace} 
               onEditProject={(p) => { setEditingProject(p); setIsProjectModalOpen(true); }}
-              onAddMember={(p) => { setEditingProject(p); setIsProjectModalOpen(true); }}
+              onAddMember={addMember}
               onArchiveProject={archiveProject}
               onRemoveMember={removeMember}
               onLeaveProject={leaveProject}

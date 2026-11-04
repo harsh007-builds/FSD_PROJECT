@@ -12,6 +12,7 @@ const {
   leaveProject,
   updateMemberRole,
   transferOwnership,
+  getProjectMembers,
 } = require('../controllers/projectController');
 const {
   inviteUserToProject,
@@ -40,6 +41,7 @@ router.route('/:id/archive')
   .patch(protect, validateObjectId, archiveProject);
 
 router.route('/:id/members')
+  .get(protect, validateObjectId, getProjectMembers)
   .post(protect, validateObjectId, addMember);
 
 router.route('/:id/members/:userId')

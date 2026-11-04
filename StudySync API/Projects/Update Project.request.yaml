@@ -1,0 +1,16 @@
+$kind: http-request
+description: Update an existing project.
+url: "{{baseUrl}}/api/projects/{{projectId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "name": "StudySync Feature Development (Updated)",
+        "description": "Updated description",
+        "status": "Active",
+        "progress": 25
+    }
+order: 4000

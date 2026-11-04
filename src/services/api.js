@@ -67,6 +67,8 @@ export const projectService = {
     headers: getAuthHeaders()
   }).then(handleResponse),
   
+  getProjectMembers: (id) => fetch(`${API_URL}/projects/${id}/members`, { headers: getAuthHeaders() }).then(handleResponse),
+
   addMember: (id, email) => fetch(`${API_URL}/projects/${id}/members`, {
     method: 'POST',
     headers: getAuthHeaders(),

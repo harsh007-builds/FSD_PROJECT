@@ -224,6 +224,13 @@ const addMember = async (req, res, next) => {
       throw new Error('User email is required');
     }
 
+    // Basic email format validation
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email.trim())) {
+      res.status(400);
+      throw new Error('Please provide a valid email address');
+    }
+
     const project = await Project.findById(req.params.id);
     if (!project) {
       res.status(404);
@@ -232,14 +239,20 @@ const addMember = async (req, res, next) => {
 
     // Only owner can add members
     if (project.owner.toString() !== req.user._id.toString()) {
-      res.status(401);
-      throw new Error('Not authorized to add members. Only owner can add members.');
+      res.status(403);
+      throw new Error('Not authorized to add members. Only the project owner can add members.');
     }
 
-    const userToAdd = await User.findOne({ email });
+    const userToAdd = await User.findOne({ email: email.toLowerCase().trim() });
     if (!userToAdd) {
       res.status(404);
-      throw new Error('User not found with this email');
+      throw new Error('No registered user found with this email.');
+    }
+
+    // Prevent adding self
+    if (userToAdd._id.toString() === req.user._id.toString()) {
+      res.status(400);
+      throw new Error('You cannot add yourself to the project.');
     }
 
     // Check if already a member
@@ -249,6 +262,11 @@ const addMember = async (req, res, next) => {
     }
 
     project.members.push(userToAdd._id);
+    
+    // Also add to memberRoles array
+    if (!project.memberRoles) project.memberRoles = [];
+    project.memberRoles.push({ user: userToAdd._id, role: 'Member', joinedAt: new Date() });
+
     await project.save();
 
     const updatedProject = await Project.findById(project._id)
@@ -260,6 +278,31 @@ const addMember = async (req, res, next) => {
 
     // Notify the added user
     await createNotification({ type: 'added_to_project', recipientId: userToAdd._id, senderId: req.user._id, projectId: project._id, message: `You were added to project "${project.name}"` });
+
+    // Emit Socket.IO event to project room
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      const addedMemberData = {
+        _id: userToAdd._id,
+        name: userToAdd.name,
+        email: userToAdd.email,
+        avatarInitials: userToAdd.avatarInitials,
+        role: 'Member',
+      };
+      io.to(`project_${project._id}`).emit('member_added', {
+        projectId: project._id.toString(),
+        member: addedMemberData,
+        addedBy: { _id: req.user._id, name: req.user.name },
+      });
+      // Also notify the added user's personal room so they see the project
+      io.to(`user_${userToAdd._id}`).emit('added_to_project', {
+        projectId: project._id.toString(),
+        projectName: project.name,
+      });
+    } catch (socketErr) {
+      console.error('Socket emit error (non-fatal):', socketErr.message);
+    }
 
     res.status(200).json(updatedProject);
   } catch (error) {
@@ -343,6 +386,21 @@ const removeMember = async (req, res, next) => {
     const updatedProject = await Project.findById(project._id)
       .populate('owner', 'name email avatarInitials')
       .populate('members', 'name email avatarInitials');
+
+    // Emit Socket.IO event to project room
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      io.to(`project_${project._id}`).emit('member_removed', {
+        projectId: project._id.toString(),
+        userId,
+      });
+      io.to(`user_${userId}`).emit('removed_from_project', {
+        projectId: project._id.toString(),
+      });
+    } catch (socketErr) {
+      console.error('Socket emit error (non-fatal):', socketErr.message);
+    }
 
     res.status(200).json(updatedProject);
   } catch (error) {
@@ -607,6 +665,50 @@ const transferOwnership = async (req, res, next) => {
   }
 };
 
+// @desc    Get project members
+// @route   GET /api/projects/:id/members
+const getProjectMembers = async (req, res, next) => {
+  try {
+    const project = await Project.findById(req.params.id)
+      .populate('owner', 'name email avatarInitials')
+      .populate('members', 'name email avatarInitials');
+    
+    if (!project) {
+      res.status(404);
+      throw new Error('Project not found');
+    }
+
+    // Only members/owner can view the member list
+    const callerRole = project.getUserRole(req.user._id);
+    if (!callerRole) {
+      res.status(403);
+      throw new Error('Not authorized to view this project\'s members');
+    }
+
+    // Enrich members with roles
+    const enrichedMembers = (project.members || []).map(m => {
+      const mId = m._id.toString();
+      const role = project.getUserRole(mId);
+      const roleEntry = (project.memberRoles || []).find(r => {
+        const entryId = r.user?._id ? r.user._id.toString() : r.user?.toString();
+        return entryId === mId;
+      });
+      return {
+        _id: m._id,
+        name: m.name,
+        email: m.email,
+        avatarInitials: m.avatarInitials,
+        role: role || 'Member',
+        joinedAt: roleEntry ? roleEntry.joinedAt : project.createdAt,
+      };
+    });
+
+    res.status(200).json(enrichedMembers);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProjects,
   getProjectById,
@@ -619,4 +721,5 @@ module.exports = {
   leaveProject,
   updateMemberRole,
   transferOwnership,
+  getProjectMembers,
 };

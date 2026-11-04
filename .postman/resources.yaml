@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: e4973e5e-065d-4d21-a9d9-7ef20b0351b9
+
+localResources:
+  collections:
+    - ../StudySync API

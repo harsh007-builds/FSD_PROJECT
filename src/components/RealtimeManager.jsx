@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useProjectContext } from '../context/ProjectContext';
-import { mapTask } from '../hooks/useProjects';
+import { mapTask, mapProject } from '../hooks/useProjects';
+import { projectService } from '../services/api';
 
 const RealtimeManager = () => {
   const { socketService, isConnected } = useSocket();
@@ -37,14 +38,27 @@ const RealtimeManager = () => {
       dispatch({ type: 'DELETE_TASK', payload: taskId });
     };
 
+    const handleMemberAdded = async (data) => {
+      if (data?.projectId) {
+        try {
+          const dbProject = await projectService.getProjectById(data.projectId);
+          dispatch({ type: 'UPDATE_PROJECT', payload: { id: data.projectId, updates: mapProject(dbProject) } });
+        } catch (err) {
+          console.error('Failed to update project on member_added:', err);
+        }
+      }
+    };
+
     socketService.on('task:created', handleTaskCreated);
     socketService.on('task:updated', handleTaskUpdated);
     socketService.on('task:deleted', handleTaskDeleted);
+    socketService.on('member_added', handleMemberAdded);
 
     return () => {
       socketService.off('task:created', handleTaskCreated);
       socketService.off('task:updated', handleTaskUpdated);
       socketService.off('task:deleted', handleTaskDeleted);
+      socketService.off('member_added', handleMemberAdded);
     };
   }, [isConnected, socketService, dispatch]);
 

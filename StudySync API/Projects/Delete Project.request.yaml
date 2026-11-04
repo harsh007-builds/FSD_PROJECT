@@ -1,0 +1,5 @@
+$kind: http-request
+description: Delete a project. Only the owner can delete.
+url: "{{baseUrl}}/api/projects/{{projectId}}"
+method: DELETE
+order: 5000

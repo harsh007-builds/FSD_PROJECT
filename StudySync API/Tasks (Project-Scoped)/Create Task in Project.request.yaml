@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Create a new task within a project.
+
+  Statuses: Backlog, Todo, In Progress, Review, Completed
+  Priorities: Low, Medium, High, Urgent
+url: "{{baseUrl}}/api/projects/{{projectId}}/tasks"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "title": "Design Database Schema",
+        "description": "Create the MongoDB schema for the new feature",
+        "priority": "High",
+        "status": "Todo",
+        "dueDate": "2026-10-15",
+        "labels": ["backend", "database"]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res._id) {
+          pm.collectionVariables.set('taskId', res._id);
+          console.log('Task ID saved:', res._id);
+      }
+    language: text/javascript
+order: 2000

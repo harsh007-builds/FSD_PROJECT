@@ -1,0 +1,16 @@
+$kind: http-request
+description: |-
+  Update only the status of a task (used by drag-and-drop).
+
+  Valid statuses: Backlog, Todo, In Progress, Review, Completed
+url: "{{baseUrl}}/api/tasks/{{taskId}}/status"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "status": "In Progress"
+    }
+order: 4000

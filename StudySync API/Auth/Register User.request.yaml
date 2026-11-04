@@ -1,0 +1,26 @@
+$kind: http-request
+description: Register a new user. Returns JWT token.
+url: "{{baseUrl}}/api/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "password": "password123"
+    }
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res.token) {
+          pm.collectionVariables.set('authToken', res.token);
+          console.log('Token saved to authToken variable');
+      }
+    language: text/javascript
+order: 1000

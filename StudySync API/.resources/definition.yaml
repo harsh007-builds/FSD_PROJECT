@@ -1,0 +1,21 @@
+$kind: collection
+description: |-
+  Complete API collection for StudySync — Real-Time Collaborative Study & Project Management Platform.
+
+  ## Setup
+  1. Set the `baseUrl` variable to your server (default: `http://localhost:5000`)
+  2. Register or Login to get a JWT token
+  3. The token is automatically stored in the `authToken` variable after login/register
+  4. All protected endpoints use the `authToken` automatically
+variables:
+  baseUrl: http://localhost:5000
+  authToken: ""
+  projectId: ""
+  taskId: ""
+  notificationId: ""
+auth:
+  - id: f63ff7c6-36b9-4097-97e1-a7a610bfe609
+    type: bearer
+    name: bearer auth
+    credentials:
+      token: "{{authToken}}"

@@ -1,0 +1,13 @@
+$kind: http-request
+description: Alternative PUT endpoint for updating task status.
+url: "{{baseUrl}}/api/tasks/{{taskId}}/status"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "status": "Completed"
+    }
+order: 5000

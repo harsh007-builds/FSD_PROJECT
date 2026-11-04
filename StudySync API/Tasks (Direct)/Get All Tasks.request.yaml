@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get all tasks across all projects the user has access to.
+url: "{{baseUrl}}/api/tasks"
+method: GET
+order: 1000

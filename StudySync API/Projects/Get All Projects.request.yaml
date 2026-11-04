@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get all projects the authenticated user owns or is a member of.
+url: "{{baseUrl}}/api/projects"
+method: GET
+order: 1000

@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get aggregated workspace data for a project including stats, upcoming deadlines, and recent activity.
+url: "{{baseUrl}}/api/projects/{{projectId}}/workspace"
+method: GET
+order: 7000

@@ -58,7 +58,8 @@ const init = (httpServer) => {
         const project = await Project.findById(projectId);
         if (!project) return;
         
-        const isAuth = project.owner.toString() === socket.user._id.toString() || project.members.includes(socket.user._id);
+        const isAuth = project.owner.toString() === socket.user._id.toString() || 
+          project.members.some(m => m.toString() === socket.user._id.toString());
         if (isAuth) {
           socket.join(`project_${projectId}`);
           console.log(`User ${socket.user._id} joined room project_${projectId}`);

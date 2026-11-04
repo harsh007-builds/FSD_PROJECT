@@ -1,0 +1,5 @@
+$kind: http-request
+description: Delete a task. User must be authorized for the task's project.
+url: "{{baseUrl}}/api/tasks/{{taskId}}"
+method: DELETE
+order: 6000

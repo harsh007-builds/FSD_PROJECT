@@ -1,0 +1,26 @@
+$kind: http-request
+description: Create a new project.
+url: "{{baseUrl}}/api/projects"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "name": "StudySync Feature Development",
+        "description": "Building advanced features for the StudySync platform",
+        "status": "Active",
+        "startDate": "2026-09-01",
+        "deadline": "2026-12-31"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const res = pm.response.json();
+      if (res._id) {
+          pm.collectionVariables.set('projectId', res._id);
+          console.log('Project ID saved:', res._id);
+      }
+    language: text/javascript
+order: 2000

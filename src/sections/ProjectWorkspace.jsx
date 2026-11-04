@@ -4,7 +4,8 @@ import {
   Activity, Settings, CheckCircle2, Clock, AlertTriangle, 
   Users, Briefcase, FileText, LayoutDashboard, Archive, 
   LogOut, UserMinus, ChevronLeft, ChevronRight, ExternalLink,
-  Plus, Tag, MessageSquare, Shield, Crown, ArrowRightLeft, Mail, UserCheck, UserX, RefreshCw, Filter, BookOpen, Video
+  Plus, Tag, MessageSquare, Shield, Crown, ArrowRightLeft, Mail, UserCheck, UserX, RefreshCw, Filter, BookOpen, Video,
+  User
 } from 'lucide-react';
 import { projectService, activityService, messageService, noteService, sessionService } from '../services/api';
 import { useUser } from '../context/UserContext';
@@ -14,6 +15,7 @@ import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailsDrawer from '../components/TaskDetailsDrawer';
 import ConfirmModal from './../components/ConfirmModal';
 import InviteMemberModal from '../components/InviteMemberModal';
+import AddMemberModal from '../components/AddMemberModal';
 import TransferOwnershipModal from '../components/TransferOwnershipModal';
 import IntegratedCalendar from '../components/IntegratedCalendar';
 import ProjectResourcesTab from '../components/ProjectResourcesTab';
@@ -106,6 +108,7 @@ const ProjectWorkspace = ({
 
   // Phase 2 Team states
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [inviteToCancel, setInviteToCancel] = useState(null);
   const [isCancellingInvite, setIsCancellingInvite] = useState(false);
@@ -125,7 +128,7 @@ const ProjectWorkspace = ({
   const [unreadDiscussionCount, setUnreadDiscussionCount] = useState(0);
 
   const socketContext = useSocket();
-  const socket = socketContext?.socket;
+  const socket = socketContext?.socket || socketContext?.socketService?.socket || socketContext?.socketService;
 
   // Phase 8 Discussions Unread Count
   useEffect(() => {
@@ -189,6 +192,26 @@ const ProjectWorkspace = ({
     socket.on('activity:new', handleNewActivity);
     return () => socket.off('activity:new', handleNewActivity);
   }, [socket, projectId]);
+
+  // Real-time member_added updates for this project
+  useEffect(() => {
+    if (!socket || !projectId) return;
+    const handleMemberAdded = (data) => {
+      const pId = data?.projectId || data?.project?._id || data?.project;
+      if (pId && pId.toString() === projectId.toString()) {
+        fetchWorkspaceData();
+        if (refreshProjects) refreshProjects();
+      }
+    };
+    if (socket.on) {
+      socket.on('member_added', handleMemberAdded);
+    }
+    return () => {
+      if (socket.off) {
+        socket.off('member_added', handleMemberAdded);
+      }
+    };
+  }, [socket, projectId, fetchWorkspaceData, refreshProjects]);
 
   // Sync tab with props if initialTab changes
   useEffect(() => {
@@ -290,6 +313,22 @@ const ProjectWorkspace = ({
     return links;
   }, [projectTasks]);
 
+  const allMembers = useMemo(() => {
+    const project = data?.project;
+    if (!project) return [];
+    const list = [...(project.members || [])];
+    const ownerId = project.owner?._id ? project.owner._id.toString() : project.owner?.toString();
+    const hasOwner = list.some(m => (m._id ? m._id.toString() : m.toString()) === ownerId);
+    if (!hasOwner && project.owner && typeof project.owner === 'object') {
+      list.unshift({
+        ...project.owner,
+        role: 'Owner',
+        workload: { totalAssigned: 0, completedTasks: 0, pendingTasks: 0, overdueTasks: 0, completionRate: 0 },
+      });
+    }
+    return list;
+  }, [data?.project]);
+
   const timeAgo = (date) => {
     if (!date) return 'just now';
     const diff = (Date.now() - new Date(date).getTime()) / 1000;
@@ -346,6 +385,14 @@ const ProjectWorkspace = ({
     } finally {
       setIsActionLoading(false);
     }
+  };
+
+  const handleAddMemberSubmit = async (projectIdArg, email) => {
+    if (!onAddMember) return;
+    await onAddMember(projectIdArg, email);
+    toast.success('Member added successfully!');
+    await fetchWorkspaceData();
+    if (refreshProjects) refreshProjects();
   };
 
   const handleInviteSubmit = async (inviteData) => {
@@ -452,20 +499,6 @@ const ProjectWorkspace = ({
   const isArchived = project.status === 'Archived';
   const pendingInvitations = data.pendingInvitations || [];
 
-  const allMembers = useMemo(() => {
-    const list = [...(project.members || [])];
-    const ownerId = project.owner?._id ? project.owner._id.toString() : project.owner?.toString();
-    const hasOwner = list.some(m => (m._id ? m._id.toString() : m.toString()) === ownerId);
-    if (!hasOwner && project.owner && typeof project.owner === 'object') {
-      list.unshift({
-        ...project.owner,
-        role: 'Owner',
-        workload: { totalAssigned: 0, completedTasks: 0, pendingTasks: 0, overdueTasks: 0, completionRate: 0 },
-      });
-    }
-    return list;
-  }, [project]);
-
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0A0F1C]">
       {/* Workspace Header */}
@@ -538,10 +571,11 @@ const ProjectWorkspace = ({
                     {isArchived ? 'Unarchive' : 'Archive'}
                   </button>
                   <button 
-                    onClick={() => onAddMember(project)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors border border-slate-700"
+                    onClick={() => setIsAddMemberModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition-colors shadow-md shadow-blue-600/20"
+                    title="Add members by email"
                   >
-                    <UserPlus className="w-3.5 h-3.5" /> Invite
+                    <UserPlus className="w-3.5 h-3.5" /> Add Members
                   </button>
                   <button 
                     onClick={() => onEditProject(project)}
@@ -790,12 +824,20 @@ const ProjectWorkspace = ({
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
+                {isOwner && (
+                  <button
+                    onClick={() => setIsAddMemberModalOpen(true)}
+                    className="btn-primary py-2 px-3 text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Add Members
+                  </button>
+                )}
                 {canManageTeam && (
                   <button
                     onClick={() => setIsInviteModalOpen(true)}
-                    className="btn-primary py-2 px-3 text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                    className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors flex items-center gap-1.5"
                   >
-                    <UserPlus className="w-3.5 h-3.5" /> Invite Teammate
+                    <Mail className="w-3.5 h-3.5" /> Invite Teammate
                   </button>
                 )}
 
@@ -1341,6 +1383,17 @@ const ProjectWorkspace = ({
         confirmText="Leave Project"
         isDanger={true}
         isLoading={isActionLoading}
+      />
+
+      {/* Add Member Modal */}
+      <AddMemberModal
+        isOpen={isAddMemberModalOpen}
+        onClose={() => setIsAddMemberModalOpen(false)}
+        onAddMember={handleAddMemberSubmit}
+        projectId={projectId}
+        projectName={project.name}
+        currentMembers={allMembers}
+        currentUserId={user?._id || user?.id}
       />
 
       {/* Invite Member Modal */}

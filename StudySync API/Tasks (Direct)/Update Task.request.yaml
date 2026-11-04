@@ -1,0 +1,17 @@
+$kind: http-request
+description: Update a task. Supports partial updates.
+url: "{{baseUrl}}/api/tasks/{{taskId}}"
+method: PUT
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "title": "Design Database Schema (Updated)",
+        "description": "Updated description with more details",
+        "priority": "Urgent",
+        "status": "In Progress",
+        "labels": ["backend", "database", "urgent"]
+    }
+order: 3000

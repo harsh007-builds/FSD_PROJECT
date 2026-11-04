@@ -1,0 +1,5 @@
+$kind: http-request
+description: Mark all notifications as read for the authenticated user.
+url: "{{baseUrl}}/api/notifications/read-all"
+method: PATCH
+order: 4000

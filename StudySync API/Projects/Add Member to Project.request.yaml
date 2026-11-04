@@ -1,0 +1,13 @@
+$kind: http-request
+description: Add a member to a project by their email.
+url: "{{baseUrl}}/api/projects/{{projectId}}/members"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "email": "member@example.com"
+    }
+order: 6000

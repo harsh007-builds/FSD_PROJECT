@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get recent activity log entries for the authenticated user.
+url: "{{baseUrl}}/api/activities"
+method: GET
+order: 1000

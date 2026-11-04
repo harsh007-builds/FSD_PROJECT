@@ -1,0 +1,5 @@
+$kind: http-request
+description: Get all tasks belonging to a specific project.
+url: "{{baseUrl}}/api/projects/{{projectId}}/tasks"
+method: GET
+order: 1000
