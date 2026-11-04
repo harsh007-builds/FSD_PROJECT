@@ -75,3 +75,4 @@ deadlineNotificationSchema.index({ deliveryStatus: 1, scheduledTime: 1 });
 const DeadlineNotification = mongoose.model('DeadlineNotification', deadlineNotificationSchema);
 
 module.exports = DeadlineNotification;
+

@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "process-deadlines": "node scripts/processDeadlineReminders.js",
+    "process-deadlines:test": "node scripts/processDeadlineReminders.js --test"
   },
   "keywords": [],
   "author": "",

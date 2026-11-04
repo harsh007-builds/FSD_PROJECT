@@ -23,15 +23,23 @@ services:
       - key: CRON_SECRET
         sync: false
 
-  # Optional Render Cron Job to wake backend and trigger deadline checks
-  # (Recommended for Render free tier to prevent sleep-induced missed alerts)
+  # Dedicated Standalone Render Cron Job for Reliable Email Delivery
+  # Independent of web service spin-downs; connects directly to MongoDB & Resend
   - type: cron
     name: studysync-deadline-cron
     env: node
     plan: starter
     schedule: "*/10 * * * *"
-    buildCommand: "true"
-    startCommand: "curl -X POST -H \"x-cron-secret: $CRON_SECRET\" https://studysync-backend.onrender.com/api/notifications/process-deadlines"
+    buildCommand: "cd server && npm install"
+    startCommand: "cd server && node scripts/processDeadlineReminders.js"
     envVars:
-      - key: CRON_SECRET
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: FRONTEND_URL
         sync: false

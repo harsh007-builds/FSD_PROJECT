@@ -221,7 +221,7 @@ async function processDueReminders() {
       const lockedReminder = await DeadlineNotification.findOneAndUpdate(
         { _id: item._id, deliveryStatus: 'pending' },
         { $set: { deliveryStatus: 'processing' } },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       if (!lockedReminder) {
