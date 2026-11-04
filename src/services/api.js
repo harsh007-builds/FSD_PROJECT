@@ -218,6 +218,20 @@ export const notificationService = {
     method: 'POST',
     headers: getAuthHeaders(),
   }).then(handleResponse),
+
+  sendTestEmail: () => fetch(`${API_URL}/notifications/test-email`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  }).then(handleResponse),
+
+  processDeadlines: () => fetch(`${API_URL}/notifications/process-deadlines`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  }).then(handleResponse),
+
+  getDeadlineHistory: () => fetch(`${API_URL}/notifications/deadline-history`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse),
 };
 
 export const invitationService = {

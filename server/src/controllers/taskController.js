@@ -3,6 +3,7 @@ const Project = require('../models/Project');
 const { logActivity } = require('./activityController');
 const { createNotification } = require('./notificationController');
 const { getIO } = require('../socket');
+const { syncTaskReminders, cancelTaskReminders } = require('../services/deadlineReminderService');
 
 // Helper function to check if user is authorized for a project
 const isAuthorizedForProject = async (projectId, userId) => {
@@ -158,6 +159,9 @@ const createTask = async (req, res, next) => {
       logActivity({ type: 'task_assigned', userId: req.user._id, projectId, taskId: task._id, targetUserId: assignee, meta: { taskTitle: title } });
     }
 
+    // Sync deadline reminders (async, non-blocking)
+    syncTaskReminders(populatedTask).catch(err => console.error('Failed to sync deadline reminders on create:', err));
+
     // Emit socket event
     try {
       getIO().to(`project_${projectId}`).emit('task:created', populatedTask);
@@ -277,6 +281,9 @@ const updateTask = async (req, res, next) => {
       }
     }
 
+    // Sync deadline reminders (async, non-blocking)
+    syncTaskReminders(updatedTask).catch(err => console.error('Failed to sync deadline reminders on update:', err));
+
     // Emit socket event
     try {
       getIO().to(`project_${task.project}`).emit('task:updated', updatedTask);
@@ -354,6 +361,9 @@ const updateTaskStatus = async (req, res, next) => {
       }
     }
 
+    // Sync deadline reminders (async, non-blocking)
+    syncTaskReminders(updatedTask).catch(err => console.error('Failed to sync deadline reminders on update:', err));
+
     // Emit socket event
     try {
       getIO().to(`project_${task.project}`).emit('task:updated', updatedTask);
@@ -393,6 +403,9 @@ const deleteTask = async (req, res, next) => {
 
     // Update project progress
     await updateProjectProgress(projectId);
+
+    // Cancel pending deadline reminders (async, non-blocking)
+    cancelTaskReminders(task._id).catch(err => console.error('Failed to cancel deadline reminders on delete:', err));
 
     // Emit socket event
     try {

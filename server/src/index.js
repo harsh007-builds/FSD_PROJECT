@@ -61,6 +61,7 @@ app.use(errorHandler);
 
 const http = require('http');
 const { init } = require('./socket');
+const { startScheduler } = require('./services/deadlineReminderService');
 
 const PORT = process.env.PORT || 5000;
 
@@ -71,4 +72,6 @@ init(server);
 
 server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  // Start the deadline reminder background scheduler (60-second polling intervals)
+  startScheduler(60000);
 });

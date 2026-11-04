@@ -4,6 +4,7 @@ import {
   User, CheckCircle2, Circle, Trash2, Edit3, MessageSquare, 
   Send, CornerDownRight, ExternalLink 
 } from 'lucide-react';
+import { formatHumanDateTimeIST } from '../utils/dateUtils';
 
 const PRIORITY_BADGES = {
   Urgent: 'bg-red-500/10 text-red-400 border-red-500/20',
@@ -142,9 +143,9 @@ const TaskDetailsDrawer = ({
                 <label className="text-xs text-slate-400 block mb-1.5 font-medium">Due Date</label>
                 <div className="flex items-center gap-2 text-xs py-1.5 text-slate-300">
                   <CalendarIcon className="w-4 h-4 text-slate-500" />
-                  <span>
+                  <span className="font-medium text-slate-200">
                     {task.dueDate 
-                      ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) 
+                      ? formatHumanDateTimeIST(task.dueDate) 
                       : 'No due date'}
                   </span>
                 </div>

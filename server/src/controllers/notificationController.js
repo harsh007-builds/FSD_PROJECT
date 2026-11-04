@@ -1,6 +1,9 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const Task = require('../models/Task');
+const DeadlineNotification = require('../models/DeadlineNotification');
+const { processDueReminders } = require('../services/deadlineReminderService');
+const { sendDeadlineEmail } = require('../services/emailService');
 
 // Map notification types to user preference keys
 const TYPE_TO_PREFERENCE_MAP = {
@@ -150,6 +153,11 @@ const getPreferences = async (req, res, next) => {
       projectInvitations: true,
       membershipChanges: true,
       deadlineReminders: true,
+      emailDeadlineReminders: true,
+      emailReminders24h: true,
+      emailReminders1h: true,
+      emailRemindersAtDeadline: true,
+      emailRemindersOverdue: true,
     };
     const preferences = { ...defaultPrefs, ...(user?.notificationPreferences?.toObject() || user?.notificationPreferences || {}) };
     res.status(200).json(preferences);
@@ -162,7 +170,18 @@ const getPreferences = async (req, res, next) => {
 // @route   PATCH /api/notifications/preferences
 const updatePreferences = async (req, res, next) => {
   try {
-    const allowedKeys = ['taskAssigned', 'taskStatusChanged', 'projectInvitations', 'membershipChanges', 'deadlineReminders'];
+    const allowedKeys = [
+      'taskAssigned',
+      'taskStatusChanged',
+      'projectInvitations',
+      'membershipChanges',
+      'deadlineReminders',
+      'emailDeadlineReminders',
+      'emailReminders24h',
+      'emailReminders1h',
+      'emailRemindersAtDeadline',
+      'emailRemindersOverdue',
+    ];
     const update = {};
     for (const key of allowedKeys) {
       if (typeof req.body[key] === 'boolean') {
@@ -187,9 +206,94 @@ const updatePreferences = async (req, res, next) => {
       projectInvitations: true,
       membershipChanges: true,
       deadlineReminders: true,
+      emailDeadlineReminders: true,
+      emailReminders24h: true,
+      emailReminders1h: true,
+      emailRemindersAtDeadline: true,
+      emailRemindersOverdue: true,
     };
     const preferences = { ...defaultPrefs, ...(user.notificationPreferences?.toObject() || user.notificationPreferences || {}) };
     res.status(200).json(preferences);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Trigger deadline reminders sweep (internal, background cron, or admin)
+// @route   POST /api/notifications/process-deadlines
+const triggerProcessDeadlines = async (req, res, next) => {
+  try {
+    const cronSecret = process.env.CRON_SECRET;
+    const authHeader = req.headers['x-cron-secret'] || req.query.secret;
+    if (cronSecret && authHeader !== cronSecret && !req.user) {
+      return res.status(401).json({ message: 'Unauthorized cron trigger' });
+    }
+
+    const result = await processDueReminders();
+    res.status(200).json({
+      success: true,
+      message: 'Deadline reminder processing cycle finished',
+      timestamp: new Date().toISOString(),
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Send test email to authenticated user
+// @route   POST /api/notifications/test-email
+const sendTestEmail = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('name email notificationPreferences');
+    if (!user || !user.email) {
+      return res.status(400).json({ message: 'User email not found' });
+    }
+
+    const testTask = {
+      title: 'Sample StudySync Task for Email Notification Testing',
+      description: 'This is a test notification confirming that your StudySync Smart Task Deadline Email System is working seamlessly!',
+      dueDate: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
+      status: 'In Progress',
+      priority: 'High',
+    };
+
+    const testProject = {
+      name: 'Test Project Workspace',
+      _id: 'test-project-id'
+    };
+
+    const result = await sendDeadlineEmail({
+      user,
+      task: testTask,
+      project: testProject,
+      reminderType: '1h_before'
+    });
+
+    res.status(200).json({
+      success: result.success,
+      message: result.mock 
+        ? `Test email simulated successfully for ${user.email} (Dev mock mode: RESEND_API_KEY not set).`
+        : `Live test email successfully sent to ${user.email} via Resend.`,
+      result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get deadline reminder history for current user
+// @route   GET /api/notifications/deadline-history
+const getDeadlineHistory = async (req, res, next) => {
+  try {
+    const history = await DeadlineNotification.find({ user: req.user._id })
+      .populate('task', 'title status dueDate priority')
+      .populate('project', 'name')
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .lean();
+
+    res.status(200).json(history);
   } catch (error) {
     next(error);
   }
@@ -342,5 +446,8 @@ module.exports = {
   getPreferences,
   updatePreferences,
   checkDeadlineReminders,
+  triggerProcessDeadlines,
+  sendTestEmail,
+  getDeadlineHistory,
   createNotification,
 };

@@ -55,9 +55,28 @@ const NotificationCenterModal = ({
     projectInvitations: true,
     membershipChanges: true,
     deadlineReminders: true,
+    emailDeadlineReminders: true,
+    emailReminders24h: true,
+    emailReminders1h: true,
+    emailRemindersAtDeadline: true,
+    emailRemindersOverdue: true,
   });
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [isCheckingDeadlines, setIsCheckingDeadlines] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+
+  // Send a test email to current user
+  const handleSendTestEmail = async () => {
+    try {
+      setIsSendingTestEmail(true);
+      const res = await notificationService.sendTestEmail();
+      toast?.showToast(res.message || 'Test email processed successfully!', 'success');
+    } catch (err) {
+      toast?.showToast(err.message || 'Failed to dispatch test email', 'error');
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
 
   // Fetch notifications and preferences
   const fetchAll = async () => {
@@ -278,15 +297,15 @@ const NotificationCenterModal = ({
 
         {/* PREFERENCES PANEL (Collapsible) */}
         {showPreferences && (
-          <div className="p-4 bg-slate-950/60 border-b border-slate-800 space-y-3 animate-in slide-in-from-top-2 duration-150">
-            <div className="flex items-center justify-between mb-2">
+          <div className="p-4 bg-slate-950/70 border-b border-slate-800 space-y-4 animate-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-blue-400" />
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-                  Notification Preferences
+                  In-App Notification Preferences
                 </h3>
               </div>
-              <span className="text-[11px] text-slate-500">Auto-saved to your account</span>
+              <span className="text-[11px] text-slate-500">Auto-saved to your profile</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -295,7 +314,7 @@ const NotificationCenterModal = ({
                 { key: 'taskStatusChanged', label: 'Task Status Changes & Completions' },
                 { key: 'projectInvitations', label: 'Project Invitations & Responses' },
                 { key: 'membershipChanges', label: 'Team Roles & Membership Updates' },
-                { key: 'deadlineReminders', label: 'Approaching & Overdue Deadlines' },
+                { key: 'deadlineReminders', label: 'In-App Deadline Alerts' },
               ].map(({ key, label }) => (
                 <label 
                   key={key} 
@@ -310,6 +329,70 @@ const NotificationCenterModal = ({
                   />
                 </label>
               ))}
+            </div>
+
+            {/* EMAIL DEADLINE REMINDER PREFERENCES */}
+            <div className="pt-3 border-t border-slate-800/80">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-emerald-400" />
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+                      Smart Email Deadline Reminders
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Automated email alerts via Resend · Asia/Kolkata (IST)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={isSendingTestEmail}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    title="Send a sample reminder to test email delivery"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{isSendingTestEmail ? 'Sending...' : 'Send Test Email'}</span>
+                  </button>
+
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={preferences.emailDeadlineReminders !== false}
+                      onChange={() => handleTogglePreference('emailDeadlineReminders')}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+              </div>
+
+              {preferences.emailDeadlineReminders !== false && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {[
+                    { key: 'emailReminders24h', label: '24 Hours Before Deadline' },
+                    { key: 'emailReminders1h', label: '1 Hour Before Deadline' },
+                    { key: 'emailRemindersAtDeadline', label: 'At Deadline (If Incomplete)' },
+                    { key: 'emailRemindersOverdue', label: 'Overdue Task Alert' },
+                  ].map(({ key, label }) => (
+                    <label 
+                      key={key} 
+                      className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors"
+                    >
+                      <span className="text-slate-300">{label}</span>
+                      <input
+                        type="checkbox"
+                        checked={preferences[key] !== false}
+                        onChange={() => handleTogglePreference(key)}
+                        className="w-4 h-4 rounded text-emerald-600 bg-slate-800 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckSquare, BookOpen, Flag } from 'lucide-react';
-import { toDateKey, fromInputDateToIso } from '../utils/dateUtils';
+import { toDateKey, toIstDateKey, toIstTimeKey, fromIstDateTimeToIso } from '../utils/dateUtils';
 
 const TaskModal = ({ 
   isOpen, 
@@ -20,6 +20,7 @@ const TaskModal = ({
     status: 'Todo',
     assignee: '',
     dueDate: '',
+    dueTime: '',
     projectId: '',
     labels: ''
   });
@@ -38,7 +39,8 @@ const TaskModal = ({
           priority: initialData.priority || 'Medium',
           status: initialData.status || 'Todo',
           assignee: initialData.assignee?._id || initialData.assignee || '',
-          dueDate: initialData.dueDate ? toDateKey(initialData.dueDate) : '',
+          dueDate: initialData.dueDate ? toIstDateKey(initialData.dueDate) : '',
+          dueTime: initialData.dueDate ? toIstTimeKey(initialData.dueDate) : '',
           projectId: initialData.projectId || activeProject?.id || '',
           labels: (initialData.labels || []).join(', ')
         });
@@ -51,6 +53,7 @@ const TaskModal = ({
           status: 'Todo',
           assignee: '',
           dueDate: initialDate || '',
+          dueTime: '18:00',
           projectId: activeProject?.id || '',
           labels: initialType === 'Study Session' ? 'study-session' : ''
         });
@@ -83,7 +86,7 @@ const TaskModal = ({
     try {
       await onSubmit({
         ...formData,
-        dueDate: formData.dueDate ? fromInputDateToIso(formData.dueDate) : null,
+        dueDate: formData.dueDate ? fromIstDateTimeToIso(formData.dueDate, formData.dueTime) : null,
         labels: formData.labels ? formData.labels.split(',').map(l => l.trim()).filter(Boolean) : [],
         projectId: finalProjectId,
         id: initialData?.id
@@ -279,48 +282,65 @@ const TaskModal = ({
             </div>
           </div>
 
-          {/* Assignee & Deadline Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Assignee */}
+          <div>
+            <label htmlFor="assignee" className="block text-sm font-medium text-slate-300 mb-1.5">Assignee</label>
+            <select
+              id="assignee"
+              name="assignee"
+              value={formData.assignee}
+              onChange={handleChange}
+              disabled={isSubmitting || (!activeProject && !formData.projectId)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white disabled:opacity-50 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none"
+            >
+              <option value="">Unassigned</option>
+              {(() => {
+                const targetProject = activeProject || projects.find(p => p.id === formData.projectId);
+                if (!targetProject) return null;
+                
+                return (
+                  <>
+                    {targetProject.owner && (
+                      <option value={targetProject.owner._id || targetProject.owner}>
+                        {targetProject.owner.name || 'Owner'}
+                      </option>
+                    )}
+                    {targetProject.members?.filter(m => m._id !== (targetProject.owner?._id || targetProject.owner)).map(m => (
+                      <option key={m._id || m} value={m._id || m}>
+                        {m.name || 'Member'}
+                      </option>
+                    ))}
+                  </>
+                );
+              })()}
+            </select>
+          </div>
+
+          {/* Deadline Date & Time (IST) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="assignee" className="block text-sm font-medium text-slate-300 mb-1.5">Assignee</label>
-              <select
-                id="assignee"
-                name="assignee"
-                value={formData.assignee}
-                onChange={handleChange}
-                disabled={isSubmitting || (!activeProject && !formData.projectId)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white disabled:opacity-50 focus:outline-none focus:border-blue-500/50 transition-colors appearance-none"
-              >
-                <option value="">Unassigned</option>
-                {(() => {
-                  const targetProject = activeProject || projects.find(p => p.id === formData.projectId);
-                  if (!targetProject) return null;
-                  
-                  return (
-                    <>
-                      {targetProject.owner && (
-                        <option value={targetProject.owner._id || targetProject.owner}>
-                          {targetProject.owner.name || 'Owner'}
-                        </option>
-                      )}
-                      {targetProject.members?.filter(m => m._id !== (targetProject.owner?._id || targetProject.owner)).map(m => (
-                        <option key={m._id || m} value={m._id || m}>
-                          {m.name || 'Member'}
-                        </option>
-                      ))}
-                    </>
-                  );
-                })()}
-              </select>
-            </div>
-            
-            <div>
-              <label htmlFor="dueDate" className="block text-sm font-medium text-slate-300 mb-1.5">Due Date</label>
+              <label htmlFor="dueDate" className="block text-sm font-medium text-slate-300 mb-1.5">
+                Deadline Date (IST)
+              </label>
               <input
                 type="date"
                 id="dueDate"
                 name="dueDate"
                 value={formData.dueDate}
+                onChange={handleChange}
+                disabled={isSubmitting}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white disabled:opacity-50 focus:outline-none focus:border-blue-500/50 transition-colors [color-scheme:dark]"
+              />
+            </div>
+            <div>
+              <label htmlFor="dueTime" className="block text-sm font-medium text-slate-300 mb-1.5">
+                Deadline Time (IST)
+              </label>
+              <input
+                type="time"
+                id="dueTime"
+                name="dueTime"
+                value={formData.dueTime}
                 onChange={handleChange}
                 disabled={isSubmitting}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white disabled:opacity-50 focus:outline-none focus:border-blue-500/50 transition-colors [color-scheme:dark]"

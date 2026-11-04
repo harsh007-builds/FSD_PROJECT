@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import TaskDetailsDrawer from './TaskDetailsDrawer';
 import ConfirmModal from './ConfirmModal';
+import { formatHumanDateTimeIST } from '../utils/dateUtils';
 
 const COLUMNS = [
   { status: 'Backlog', label: 'Backlog', color: 'text-slate-400', dotColor: 'bg-slate-500', headerBg: 'bg-slate-800/30' },
@@ -391,9 +392,9 @@ const KanbanBoard = ({
                             <div className={`flex items-center gap-1 font-medium ${overdue ? 'text-red-400' : 'text-slate-400'}`}>
                               {overdue && <AlertTriangle className="w-3 h-3 text-red-400" />}
                               <CalendarIcon className="w-3 h-3 text-slate-500" />
-                              <span>
+                              <span title={task.dueDate ? formatHumanDateTimeIST(task.dueDate) : undefined}>
                                 {task.dueDate
-                                  ? (overdue ? 'Overdue · ' : '') + new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                                  ? (overdue ? 'Overdue · ' : '') + formatHumanDateTimeIST(task.dueDate)
                                   : 'No date'}
                               </span>
                             </div>

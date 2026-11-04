@@ -142,3 +142,59 @@ export const formatHumanDate = (val) => {
     year: 'numeric',
   });
 };
+
+// Formats a date & time in Asia/Kolkata (IST): "Sat, Nov 7, 2026, 06:30 PM IST"
+export const formatHumanDateTimeIST = (val) => {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  const datePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(d);
+  const timePart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d);
+  return `${datePart} at ${timePart} IST`;
+};
+
+// Extracts HH:mm in Asia/Kolkata (IST) for <input type="time" />
+export const toIstTimeKey = (val) => {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+};
+
+// Extracts YYYY-MM-DD in Asia/Kolkata (IST)
+export const toIstDateKey = (val) => {
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+};
+
+// Combines Date (YYYY-MM-DD) and Time (HH:mm) in Asia/Kolkata (IST) to ISO UTC
+export const fromIstDateTimeToIso = (dateStr, timeStr) => {
+  if (!dateStr) return null;
+  const time = timeStr && timeStr.trim() ? timeStr.trim() : '23:59';
+  const isoWithTz = `${dateStr}T${time}:00+05:30`;
+  const d = new Date(isoWithTz);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+};

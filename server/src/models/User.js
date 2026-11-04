@@ -34,6 +34,11 @@ const userSchema = new mongoose.Schema(
       projectInvitations: { type: Boolean, default: true },
       membershipChanges: { type: Boolean, default: true },
       deadlineReminders: { type: Boolean, default: true },
+      emailDeadlineReminders: { type: Boolean, default: true },
+      emailReminders24h: { type: Boolean, default: true },
+      emailReminders1h: { type: Boolean, default: true },
+      emailRemindersAtDeadline: { type: Boolean, default: true },
+      emailRemindersOverdue: { type: Boolean, default: true },
     },
     savedTaskFilters: [{
       name: { type: String, required: true },
@@ -53,9 +58,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Pre-save hook to hash password before saving
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
 
   const salt = await bcrypt.genSalt(10);
