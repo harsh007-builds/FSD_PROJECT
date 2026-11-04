@@ -43,6 +43,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const internalRoutes = require('./routes/internalRoutes');
 
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
@@ -53,6 +54,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/internal', internalRoutes);
 
 // Error Handling Middleware
 app.use(notFound);

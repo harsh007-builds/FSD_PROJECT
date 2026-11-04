@@ -22,24 +22,3 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
-
-  # Dedicated Standalone Render Cron Job for Reliable Email Delivery
-  # Independent of web service spin-downs; connects directly to MongoDB & Resend
-  - type: cron
-    name: studysync-deadline-cron
-    env: node
-    plan: starter
-    schedule: "*/10 * * * *"
-    buildCommand: "cd server && npm install"
-    startCommand: "cd server && node scripts/processDeadlineReminders.js"
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
-      - key: FRONTEND_URL
-        sync: false
