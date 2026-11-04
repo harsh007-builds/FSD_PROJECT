@@ -1,4 +1,9 @@
+const path = require('path');
 require('dotenv').config();
+if (!process.env.CRON_SECRET) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+  require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+}
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -74,6 +79,8 @@ init(server);
 
 server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  const isCronConfigured = Boolean(process.env.CRON_SECRET && process.env.CRON_SECRET.trim().length > 0);
+  console.log(`[CRON CONFIG] CRON_SECRET configured: ${isCronConfigured}, length: ${isCronConfigured ? process.env.CRON_SECRET.trim().length : 0}`);
   // Start the deadline reminder background scheduler (60-second polling intervals)
   startScheduler(60000);
 });

@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const path = require('path');
+
+// Ensure dotenv is loaded even if this module is evaluated in different contexts
+require('dotenv').config();
+if (!process.env.CRON_SECRET) {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+}
+
 const DeadlineNotification = require('../models/DeadlineNotification');
 const {
   processDueReminders,
@@ -26,36 +34,115 @@ function formatIST(date = new Date()) {
   }
 }
 
-// Constant-time string comparison to prevent timing attacks
-function safeCompare(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
+/**
+ * Strips whitespace and wrapping quotes (e.g., "my_secret" or 'my_secret')
+ * that often get introduced during dashboard copy-pasting
+ */
+function cleanSecret(val) {
+  if (typeof val !== 'string') return '';
+  let cleaned = val.trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned;
 }
 
-// Middleware: Strictly verify CRON_SECRET
-const verifyCronSecret = (req, res, next) => {
-  const serverSecret = process.env.CRON_SECRET;
-  if (!serverSecret) {
-    console.error('[CRON ERROR] CRON_SECRET is not configured on the server');
-    return res.status(500).json({
-      error: 'CRON_SECRET is not configured on the server',
-    });
+/**
+ * Safely discovers and cleans the server secret from process.env
+ * Handles variations in case, whitespace, or dashboard naming
+ */
+function getServerSecret() {
+  // 1. Direct standard environment variable lookup
+  if (process.env.CRON_SECRET) {
+    const cleaned = cleanSecret(process.env.CRON_SECRET);
+    if (cleaned.length > 0) return cleaned;
   }
 
-  // Extract secret from x-cron-secret header or Authorization: Bearer <token>
-  let clientSecret = req.headers['x-cron-secret'];
-  if (!clientSecret && req.headers.authorization) {
-    const parts = req.headers.authorization.split(' ');
-    if (parts.length === 2 && (parts[0] === 'Bearer' || parts[0] === 'Token')) {
-      clientSecret = parts[1];
+  // 2. Fallback: Search all environment keys case-insensitively with quotes/spaces stripped
+  for (const rawKey of Object.keys(process.env)) {
+    const normalizedKey = rawKey.trim().replace(/^["']|["']$/g, '').toUpperCase();
+    if (
+      normalizedKey === 'CRON_SECRET' ||
+      normalizedKey === 'CRON_SECRET_KEY' ||
+      normalizedKey === 'RENDER_CRON_SECRET'
+    ) {
+      const cleaned = cleanSecret(process.env[rawKey]);
+      if (cleaned.length > 0) {
+        return cleaned;
+      }
     }
   }
 
-  // Reject missing or non-matching secrets securely
-  if (!clientSecret || !safeCompare(clientSecret, serverSecret)) {
+  return null;
+}
+
+/**
+ * Constant-time comparison using SHA-256 fixed-length digests
+ * Prevents timing attacks, prevents buffer length mismatches, and never crashes
+ */
+function safeCompare(clientStr, serverStr) {
+  if (typeof clientStr !== 'string' || typeof serverStr !== 'string') return false;
+  if (!clientStr || !serverStr) return false;
+  const hashClient = crypto.createHash('sha256').update(clientStr).digest();
+  const hashServer = crypto.createHash('sha256').update(serverStr).digest();
+  return crypto.timingSafeEqual(hashClient, hashServer);
+}
+
+/**
+ * Middleware: Strictly verify CRON_SECRET with safe diagnostic logging
+ */
+const verifyCronSecret = (req, res, next) => {
+  const serverSecret = getServerSecret();
+  const isConfigured = Boolean(serverSecret && serverSecret.length > 0);
+  const secretLength = isConfigured ? serverSecret.length : 0;
+
+  // Safe diagnostic log: reports ONLY existence and length, NEVER the secret value
+  console.log(`[CRON DIAGNOSTIC] CRON_SECRET configured: ${isConfigured}, length: ${secretLength}`);
+
+  if (!isConfigured) {
+    console.error(`[CRON ERROR] CRON_SECRET is not configured or empty on the server at ${formatIST()}`);
+    return res.status(500).json({
+      error: 'CRON_SECRET is not configured on the server',
+      diagnostic: {
+        configured: false,
+        length: 0,
+        hint: 'Please ensure CRON_SECRET is defined in your Render environment variables and that the backend service has completed redeployment.',
+      },
+    });
+  }
+
+  // Extract client secret from various common header conventions
+  let rawClientSecret =
+    req.headers['x-cron-secret'] ||
+    req.headers['x_cron_secret'] ||
+    req.headers['cron-secret'] ||
+    req.headers['cron_secret'];
+
+  // Fallback: Check standard Authorization Bearer header
+  if (!rawClientSecret && req.headers.authorization) {
+    const parts = req.headers.authorization.split(' ');
+    if (parts.length === 2 && (parts[0] === 'Bearer' || parts[0] === 'Token')) {
+      rawClientSecret = parts[1];
+    }
+  }
+
+  // Fallback: Check query parameter (e.g., ?secret=...)
+  if (!rawClientSecret && (req.query?.secret || req.query?.cron_secret)) {
+    rawClientSecret = req.query.secret || req.query.cron_secret;
+  }
+
+  const clientSecret = cleanSecret(rawClientSecret);
+  const isClientProvided = Boolean(clientSecret && clientSecret.length > 0);
+  const clientLength = isClientProvided ? clientSecret.length : 0;
+
+  // Safe diagnostic log for incoming client token
+  console.log(`[CRON DIAGNOSTIC] Incoming client secret provided: ${isClientProvided}, length: ${clientLength}`);
+
+  // Securely compare
+  if (!isClientProvided || !safeCompare(clientSecret, serverSecret)) {
     const callerIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     console.warn(`[CRON WARN] Unauthorized attempt to access internal cron endpoint from IP: ${callerIp} at ${formatIST()}`);
     return res.status(401).json({
@@ -79,10 +166,10 @@ router.post('/process-deadline-reminders', verifyCronSecret, async (req, res, ne
   console.log(`[EXTERNAL CRON TRIGGER] Request received from ${callerIp} at ${startTimeIST}`);
 
   try {
-    // 1. Sync active tasks to ensure newly created/updated tasks have reminder schedules
+    // 1. Synchronize active tasks to ensure new/modified tasks have reminder schedules
     await syncAllActiveTasks();
 
-    // 2. Count current pending and due reminders in the database
+    // 2. Inspect pending and due reminders in database
     const now = new Date();
     const totalPendingCount = await DeadlineNotification.countDocuments({ deliveryStatus: 'pending' });
     const dueCount = await DeadlineNotification.countDocuments({
@@ -92,7 +179,7 @@ router.post('/process-deadline-reminders', verifyCronSecret, async (req, res, ne
 
     console.log(`[EXTERNAL CRON] Queue state: ${totalPendingCount} pending, ${dueCount} due now`);
 
-    // 3. Process due reminders atomically (with distributed locks and deduplication)
+    // 3. Process due reminders atomically (with atomic locking, idempotent checks, and failure tracking)
     const result = await processDueReminders();
     const durationMs = Date.now() - startTime;
     const finishTimeIST = formatIST();
