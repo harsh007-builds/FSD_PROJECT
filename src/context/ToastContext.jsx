@@ -25,9 +25,10 @@ export const ToastProvider = ({ children }) => {
   const success = useCallback((msg) => addToast(msg, 'success'), [addToast]);
   const error = useCallback((msg) => addToast(msg, 'error'), [addToast]);
   const info = useCallback((msg) => addToast(msg, 'info'), [addToast]);
+  const showToast = useCallback((msg, type = 'info') => addToast(msg, type), [addToast]);
 
   return (
-    <ToastContext.Provider value={{ addToast, removeToast, success, error, info }}>
+    <ToastContext.Provider value={{ addToast, removeToast, success, error, info, showToast }}>
       {children}
       {/* Toast container floating at bottom right */}
       <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 max-w-sm w-full pointer-events-none">

@@ -6,7 +6,7 @@ const RouterContext = createContext();
 const parseLocation = () => {
   const pathname = window.location.pathname || '/';
   const hash = window.location.hash.replace(/^#/, '');
-  
+
   // Prefer hash if pathname is root and hash starts with '/', otherwise prioritize pathname
   const path = (pathname !== '/' || !hash.startsWith('/')) ? pathname : hash;
   const search = window.location.search || (hash.includes('?') ? hash.slice(hash.indexOf('?')) : '');
@@ -14,7 +14,7 @@ const parseLocation = () => {
 
   // Match /projects/:projectId or /workspace/:projectId from path or hash
   const projectMatch = path.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/) ||
-                       (hash.startsWith('/') ? hash.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/) : null);
+    (hash.startsWith('/') ? hash.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/) : null);
   const projectId = projectMatch ? projectMatch[1] : null;
 
   return {
@@ -46,7 +46,7 @@ export const RouterProvider = ({ children }) => {
 
   const navigate = useCallback((to) => {
     if (!to) return;
-    
+
     // Normalize path
     let target = to;
     if (!target.startsWith('/') && !target.startsWith('#')) {
@@ -71,10 +71,10 @@ export const RouterProvider = ({ children }) => {
   }, [navigate]);
 
   return (
-    <RouterContext.Provider value={{ 
-      ...routeInfo, 
-      navigate, 
-      navigateToProject 
+    <RouterContext.Provider value={{
+      ...routeInfo,
+      navigate,
+      navigateToProject
     }}>
       {children}
     </RouterContext.Provider>
