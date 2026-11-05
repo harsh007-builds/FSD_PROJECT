@@ -788,8 +788,8 @@ const DashboardHome = () => {
             ) : (
               stats?.projectSummaries?.map(p => (
                 <div
-                  key={p.id}
-                  onClick={() => navigateToProject(p.id)}
+                  key={p.id || p._id}
+                  onClick={() => navigateToProject(p.id || p._id)}
                   className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl hover:border-slate-700 transition-colors cursor-pointer group"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">

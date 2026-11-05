@@ -313,6 +313,52 @@ function buildDeadlineEmailHtml({
 }
 
 /**
+ * Helper to retrieve sanitized RESEND_API_KEY from environment
+ */
+function getCleanResendApiKey() {
+  let key = process.env.RESEND_API_KEY;
+  if (!key) {
+    for (const k of Object.keys(process.env)) {
+      if (k.trim().toUpperCase() === 'RESEND_API_KEY') {
+        key = process.env[k];
+        break;
+      }
+    }
+  }
+  if (typeof key === 'string') {
+    key = key.trim().replace(/^["']|["']$/g, '');
+  }
+  return key || null;
+}
+
+/**
+ * Helper to retrieve sanitized EMAIL_FROM from environment
+ */
+function getCleanEmailFrom() {
+  let from = process.env.EMAIL_FROM;
+  if (!from) {
+    for (const k of Object.keys(process.env)) {
+      if (k.trim().toUpperCase() === 'EMAIL_FROM') {
+        from = process.env[k];
+        break;
+      }
+    }
+  }
+  if (typeof from === 'string') {
+    from = from.trim().replace(/^["']|["']$/g, '');
+  }
+  return from || 'StudySync <onboarding@resend.dev>';
+}
+
+/**
+ * Check whether a valid live Resend API key is configured
+ */
+function isResendConfigured() {
+  const key = getCleanResendApiKey();
+  return Boolean(key && key.length > 0 && key !== 'test' && key !== 'mock');
+}
+
+/**
  * Send deadline reminder email via Resend API
  */
 async function sendDeadlineEmail({
@@ -348,9 +394,10 @@ async function sendDeadlineEmail({
     projectId = projectId || project._id || project.id;
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || 'StudySync <onboarding@resend.dev>';
+  const apiKey = getCleanResendApiKey();
+  const fromEmail = getCleanEmailFrom();
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const isProduction = process.env.NODE_ENV === 'production';
 
   const meta = REMINDER_METADATA[reminderType] || REMINDER_METADATA['24h_before'];
   const subject = `${meta.subjectPrefix}: "${taskTitle}"`;
@@ -369,8 +416,13 @@ async function sendDeadlineEmail({
     projectId,
   });
 
-  // Mock / Safe development mode when no RESEND_API_KEY is supplied
+  // Mock / Safe development mode when no RESEND_API_KEY is supplied (local dev only)
   if (!apiKey || apiKey === 'test' || apiKey === 'mock') {
+    if (isProduction) {
+      const errMsg = 'RESEND_API_KEY is not configured in Render environment variables. Cannot send live emails in production.';
+      console.error(`[EmailService PRODUCTION ERROR] ${errMsg}`);
+      throw new Error(errMsg);
+    }
     const mockId = `mock_resend_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     console.log(`[EmailService MOCK] Sending to: ${to} | Subject: "${subject}" | MockID: ${mockId}`);
     return {
@@ -393,10 +445,12 @@ async function sendDeadlineEmail({
     });
 
     if (result.error) {
-      throw new Error(result.error.message || JSON.stringify(result.error));
+      const errMsg = result.error.message || JSON.stringify(result.error);
+      console.error(`[EmailService LIVE ERROR] Resend rejected dispatch to ${to}: ${errMsg}`);
+      throw new Error(`Resend API Error: ${errMsg}`);
     }
 
-    console.log(`[EmailService LIVE] Email dispatched to ${to} via Resend. Message ID: ${result.data?.id}`);
+    console.log(`[EmailService LIVE] Email successfully delivered to ${to} via Resend. Message ID: ${result.data?.id}`);
     return {
       success: true,
       id: result.data?.id,
@@ -414,5 +468,8 @@ module.exports = {
   sendDeadlineEmail,
   buildDeadlineEmailHtml,
   formatISTDateTime,
+  isResendConfigured,
+  getCleanResendApiKey,
+  getCleanEmailFrom,
   REMINDER_METADATA,
 };

@@ -4,14 +4,17 @@ const RouterContext = createContext();
 
 // Helper to parse current path and query params
 const parseLocation = () => {
+  const pathname = window.location.pathname || '/';
   const hash = window.location.hash.replace(/^#/, '');
-  // Prefer hash if present (useful for static preview environments), otherwise pathname
-  const path = hash.startsWith('/') ? hash : window.location.pathname;
+  
+  // Prefer hash if pathname is root and hash starts with '/', otherwise prioritize pathname
+  const path = (pathname !== '/' || !hash.startsWith('/')) ? pathname : hash;
   const search = window.location.search || (hash.includes('?') ? hash.slice(hash.indexOf('?')) : '');
   const params = new URLSearchParams(search);
 
-  // Match /projects/:projectId or /workspace/:projectId
-  const projectMatch = path.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/);
+  // Match /projects/:projectId or /workspace/:projectId from path or hash
+  const projectMatch = path.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/) ||
+                       (hash.startsWith('/') ? hash.match(/^\/(?:projects|workspace)\/([a-zA-Z0-9_-]+)/) : null);
   const projectId = projectMatch ? projectMatch[1] : null;
 
   return {

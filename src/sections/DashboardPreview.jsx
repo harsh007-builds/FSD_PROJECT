@@ -54,7 +54,7 @@ const DashboardPreview = () => {
     }
   }, [urlProjectId, activeProjectId, setActiveProject]);
 
-  const currentProjectId = activeProjectId || urlProjectId;
+  const currentProjectId = urlProjectId || activeProjectId;
 
   const activeProject = useMemo(() => {
     return projects.find(p => p.id === currentProjectId) || null;
@@ -295,7 +295,7 @@ const DashboardPreview = () => {
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0A0F1C]">
         
         {/* Global Toolbar Header (only visible when not inside dedicated workspace view) */}
-        {!activeProjectId && (
+        {!currentProjectId && (
           <header className="h-16 border-b border-slate-800/60 flex items-center justify-between px-6 shrink-0 bg-slate-900/20 backdrop-blur-md">
             <div className="flex items-center gap-3">
               <button
@@ -340,7 +340,7 @@ const DashboardPreview = () => {
         )}
 
         {/* View Switcher: Dedicated Workspace vs List View */}
-        <main className="flex-1 overflow-x-auto overflow-y-hidden p-0 m-0 relative">
+        <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           {error ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-6">
               <p className="text-sm text-red-400">{error}</p>

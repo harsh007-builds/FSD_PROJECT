@@ -134,7 +134,7 @@ const createTask = async (req, res, next) => {
       priority: priority || 'Medium',
       type: ['Task', 'Milestone', 'Study Session'].includes(type) ? type : 'Task',
       status: status || 'Todo',
-      assignee: assignee || null,
+      assignee: assignee || req.user._id,
       createdBy: req.user._id,
       dueDate: dueDate || null,
       labels: labels || [],

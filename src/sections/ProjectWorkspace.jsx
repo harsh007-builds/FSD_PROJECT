@@ -316,9 +316,9 @@ const ProjectWorkspace = ({
   const allMembers = useMemo(() => {
     const project = data?.project;
     if (!project) return [];
-    const list = [...(project.members || [])];
+    const list = [...(project.members || [])].filter(Boolean);
     const ownerId = project.owner?._id ? project.owner._id.toString() : project.owner?.toString();
-    const hasOwner = list.some(m => (m._id ? m._id.toString() : m.toString()) === ownerId);
+    const hasOwner = list.some(m => (m?._id ? m._id.toString() : m?.toString()) === ownerId);
     if (!hasOwner && project.owner && typeof project.owner === 'object') {
       list.unshift({
         ...project.owner,
@@ -470,7 +470,7 @@ const ProjectWorkspace = ({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#0A0F1C] h-full">
+      <div className="flex-1 flex items-center justify-center bg-[#0A0F1C] h-full min-h-[400px]">
         <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
       </div>
     );
@@ -478,7 +478,7 @@ const ProjectWorkspace = ({
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#0A0F1C] h-full text-center p-6">
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#0A0F1C] h-full min-h-[400px] text-center p-6">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
         <h2 className="text-xl font-bold text-white mb-2">Workspace Error</h2>
         <p className="text-slate-400 max-w-md">{error}</p>
@@ -489,7 +489,18 @@ const ProjectWorkspace = ({
     );
   }
 
-  if (!data) return null;
+  if (!data || !data.project) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#0A0F1C] h-full min-h-[400px] text-center p-6">
+        <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
+        <h2 className="text-xl font-bold text-white mb-2">Workspace Unavailable</h2>
+        <p className="text-slate-400 max-w-md">Could not load project workspace details.</p>
+        <button onClick={onClose} className="mt-6 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   const { project, upcomingDeadlines, recentActivity } = data;
   const callerRole = data.callerRole || (project.owner && user && (project.owner._id === user._id || project.owner === user._id) ? 'Owner' : 'Member');

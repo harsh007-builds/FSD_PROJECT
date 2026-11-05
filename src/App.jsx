@@ -14,6 +14,7 @@ import { SocketProvider } from './context/SocketContext';
 import { RouterProvider, useRouter } from './context/RouterContext';
 import { ToastProvider } from './context/ToastContext';
 import RealtimeManager from './components/RealtimeManager';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function AppContent() {
   const { user, loading } = useUser();
@@ -77,10 +78,12 @@ function AppContent() {
             onTabChange={handleTabChange} 
             isLoggedIn
           >
-            {activeTab === 'dashboard' && <DashboardHome />}
-            {activeTab === 'tasks' && <MyTasksView />}
-            {activeTab === 'board' && <DashboardPreview />}
-            {activeTab === 'calendar' && <CalendarView />}
+            <ErrorBoundary>
+              {activeTab === 'dashboard' && <DashboardHome />}
+              {activeTab === 'tasks' && <MyTasksView />}
+              {activeTab === 'board' && <DashboardPreview />}
+              {activeTab === 'calendar' && <CalendarView />}
+            </ErrorBoundary>
           </MainLayout>
         </ProjectProvider>
       </SocketProvider>

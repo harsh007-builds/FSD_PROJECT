@@ -51,7 +51,7 @@ const TaskModal = ({
           type: initialType || 'Task',
           priority: 'Medium',
           status: 'Todo',
-          assignee: '',
+          assignee: activeProject?.owner?._id || activeProject?.owner || '',
           dueDate: initialDate || '',
           dueTime: '18:00',
           projectId: activeProject?.id || '',

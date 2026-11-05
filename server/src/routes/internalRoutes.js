@@ -10,10 +10,12 @@ if (!process.env.CRON_SECRET) {
 }
 
 const DeadlineNotification = require('../models/DeadlineNotification');
+const Task = require('../models/Task');
 const {
   processDueReminders,
   syncAllActiveTasks,
 } = require('../services/deadlineReminderService');
+const { isResendConfigured } = require('../services/emailService');
 
 // Asia/Kolkata (IST) Timezone Formatter
 function formatIST(date = new Date()) {
@@ -166,8 +168,8 @@ router.post('/process-deadline-reminders', verifyCronSecret, async (req, res, ne
   console.log(`[EXTERNAL CRON TRIGGER] Request received from ${callerIp} at ${startTimeIST}`);
 
   try {
-    // 1. Synchronize active tasks to ensure new/modified tasks have reminder schedules
-    await syncAllActiveTasks();
+    // 1. Synchronize active tasks to ensure all tasks have reminder schedules
+    const syncStats = await syncAllActiveTasks();
 
     // 2. Inspect pending and due reminders in database
     const now = new Date();
@@ -175,6 +177,22 @@ router.post('/process-deadline-reminders', verifyCronSecret, async (req, res, ne
     const dueCount = await DeadlineNotification.countDocuments({
       deliveryStatus: 'pending',
       scheduledTime: { $lte: now },
+    });
+
+    // Collect pending breakdown by reminder type
+    const pendingByType = await DeadlineNotification.aggregate([
+      { $match: { deliveryStatus: 'pending' } },
+      { $group: { _id: '$reminderType', count: { $sum: 1 } } },
+    ]);
+    const pendingBreakdown = {};
+    pendingByType.forEach(item => {
+      pendingBreakdown[item._id] = item.count;
+    });
+
+    // Collect excluded task counts
+    const completedTasksCount = await Task.countDocuments({ status: 'Completed' });
+    const noDueDateTasksCount = await Task.countDocuments({
+      $or: [{ dueDate: null }, { dueDate: { $exists: false } }],
     });
 
     console.log(`[EXTERNAL CRON] Queue state: ${totalPendingCount} pending, ${dueCount} due now`);
@@ -191,13 +209,25 @@ router.post('/process-deadline-reminders', verifyCronSecret, async (req, res, ne
       message: 'Deadline reminder processing cycle completed successfully',
       timestamp: finishTimeIST,
       metrics: {
+        totalActiveTasks: syncStats.totalActiveTasks || 0,
+        syncedTasks: syncStats.syncedTasks || 0,
+        skippedNoRecipient: syncStats.skippedNoRecipient || 0,
         scannedPending: totalPendingCount,
         dueCount,
         processed: result.processed,
         sent: result.sent,
         skipped: result.skipped,
         errors: result.errors,
+        lastError: result.lastError || null,
         durationMs,
+      },
+      diagnostics: {
+        resendConfigured: isResendConfigured(),
+        pendingByReminderType: pendingBreakdown,
+        exclusions: {
+          completedTasksExcluded: completedTasksCount,
+          noDueDateTasksExcluded: noDueDateTasksCount,
+        },
       },
     });
   } catch (error) {

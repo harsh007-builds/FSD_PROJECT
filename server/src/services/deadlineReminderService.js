@@ -60,29 +60,46 @@ async function syncTaskReminders(taskInput) {
   try {
     if (!taskInput) return;
     const taskId = taskInput._id || taskInput.id || taskInput;
-    const task = await Task.findById(taskId).populate('assignee').populate('project');
+    
+    // Always fetch task with full assignee, createdBy, and project.owner populated
+    const task = await Task.findById(taskId)
+      .populate('assignee')
+      .populate('createdBy')
+      .populate({
+        path: 'project',
+        populate: { path: 'owner' },
+      });
 
     if (!task) {
       // Task was deleted -> cancel all pending reminders
       await cancelTaskReminders(taskId);
-      return;
+      return { status: 'deleted' };
     }
 
     // If task is completed -> cancel all pending reminders
     if (task.status === 'Completed') {
       await cancelTaskReminders(taskId);
-      return;
+      return { status: 'completed' };
     }
 
-    // If no deadline or no assignee -> cancel pending reminders
-    if (!task.dueDate || !task.assignee) {
+    // If no deadline -> cancel pending reminders
+    if (!task.dueDate) {
       await cancelTaskReminders(taskId);
-      return;
+      return { status: 'no_due_date' };
     }
 
-    const assigneeUser = task.assignee;
-    if (!assigneeUser || !assigneeUser.email) {
-      return;
+    // Resolve recipient user: explicit assignee -> task creator -> project owner
+    const recipientUser = (task.assignee && task.assignee.email)
+      ? task.assignee
+      : (task.createdBy && task.createdBy.email)
+        ? task.createdBy
+        : (task.project?.owner && task.project.owner.email)
+          ? task.project.owner
+          : null;
+
+    if (!recipientUser || !recipientUser.email) {
+      await cancelTaskReminders(taskId);
+      return { status: 'no_recipient' };
     }
 
     const now = Date.now();
@@ -91,6 +108,7 @@ async function syncTaskReminders(taskInput) {
     for (const reminderType of reminderTypes) {
       const scheduledTime = calculateScheduledTime(task.dueDate, reminderType);
       const isOverdueType = reminderType === 'overdue';
+      const isAtDeadlineType = reminderType === 'at_deadline';
 
       // Find existing notification record for this task and reminder type
       const existing = await DeadlineNotification.findOne({
@@ -98,34 +116,44 @@ async function syncTaskReminders(taskInput) {
         reminderType,
       });
 
+      // Detect if existing was only a simulated development mock that was never delivered via Resend
+      const isMockPlaceholder = Boolean(existing && existing.resendId && existing.resendId.startsWith('mock_resend_'));
+
       // If scheduled time is in the past:
-      // - For upcoming reminders ('24h_before', '1h_before'), skip scheduling if deadline is too close
-      // - For overdue, only schedule if task is actually past deadline and not yet sent
       if (scheduledTime.getTime() <= now) {
-        if (!existing) {
-          if (isOverdueType && new Date(task.dueDate).getTime() < now) {
-            // Task is already overdue when synced: schedule immediate overdue check
-            await DeadlineNotification.create({
-              task: task._id,
-              user: assigneeUser._id,
-              project: task.project?._id || task.project,
-              reminderType,
-              scheduledTime: new Date(now),
-              deliveryStatus: 'pending',
-              recipientEmail: assigneeUser.email,
-              metadata: {
-                taskTitle: task.title,
-                projectName: task.project?.name,
-                dueDate: task.dueDate,
-                status: task.status,
-                priority: task.priority,
-              },
-            });
+        if (!existing || isMockPlaceholder) {
+          // If task deadline has arrived or passed, schedule overdue or at_deadline immediately
+          if ((isOverdueType || isAtDeadlineType) && new Date(task.dueDate).getTime() <= now) {
+            if (existing) {
+              existing.scheduledTime = new Date(now);
+              existing.deliveryStatus = 'pending';
+              existing.user = recipientUser._id;
+              existing.recipientEmail = recipientUser.email;
+              existing.sentTime = null;
+              existing.resendId = null;
+              existing.errorDetails = null;
+              await existing.save();
+            } else {
+              await DeadlineNotification.create({
+                task: task._id,
+                user: recipientUser._id,
+                project: task.project?._id || task.project,
+                reminderType,
+                scheduledTime: new Date(now),
+                deliveryStatus: 'pending',
+                recipientEmail: recipientUser.email,
+                metadata: {
+                  taskTitle: task.title,
+                  projectName: task.project?.name,
+                  dueDate: task.dueDate,
+                  status: task.status,
+                  priority: task.priority,
+                },
+              });
+            }
           }
-          // Otherwise skip past reminder
           continue;
         } else {
-          // If already existing and pending but past due, leave for scheduler to process
           continue;
         }
       }
@@ -135,12 +163,12 @@ async function syncTaskReminders(taskInput) {
         try {
           await DeadlineNotification.create({
             task: task._id,
-            user: assigneeUser._id,
+            user: recipientUser._id,
             project: task.project?._id || task.project,
             reminderType,
             scheduledTime,
             deliveryStatus: 'pending',
-            recipientEmail: assigneeUser.email,
+            recipientEmail: recipientUser.email,
             metadata: {
               taskTitle: task.title,
               projectName: task.project?.name,
@@ -153,12 +181,17 @@ async function syncTaskReminders(taskInput) {
           // Duplicate key caught safely
         }
       } else {
-        // Recalculate future reminder if deadline or assignee changed
-        if (existing.deliveryStatus === 'pending' || existing.deliveryStatus === 'cancelled') {
+        // Recalculate future reminder if deadline, assignee changed, or restoring a mock placeholder
+        if (existing.deliveryStatus === 'pending' || existing.deliveryStatus === 'cancelled' || isMockPlaceholder) {
           existing.scheduledTime = scheduledTime;
           existing.deliveryStatus = 'pending';
-          existing.user = assigneeUser._id;
-          existing.recipientEmail = assigneeUser.email;
+          existing.user = recipientUser._id;
+          existing.recipientEmail = recipientUser.email;
+          if (isMockPlaceholder) {
+            existing.sentTime = null;
+            existing.resendId = null;
+            existing.errorDetails = null;
+          }
           existing.metadata = {
             taskTitle: task.title,
             projectName: task.project?.name,
@@ -170,8 +203,11 @@ async function syncTaskReminders(taskInput) {
         }
       }
     }
+
+    return { status: 'synced', recipient: recipientUser.email };
   } catch (err) {
     console.error(`[DeadlineReminderService] Error syncing task ${taskInput?._id || taskInput}:`, err.message);
+    return { status: 'error', error: err.message };
   }
 }
 
@@ -198,12 +234,14 @@ async function cancelTaskReminders(taskId) {
  * Core processor: finds all due pending reminders and dispatches emails + in-app socket alerts
  */
 async function processDueReminders() {
-  if (isProcessing) return { processed: 0, skipped: 0, errors: 0 };
+  if (isProcessing) return { processed: 0, sent: 0, skipped: 0, errors: 0 };
   isProcessing = true;
 
   let processedCount = 0;
+  let sentCount = 0;
   let skippedCount = 0;
   let errorCount = 0;
+  let lastError = null;
 
   try {
     const now = new Date();
@@ -230,10 +268,15 @@ async function processDueReminders() {
       }
 
       try {
-        // Fetch current task status from DB
+        // Fetch current task status from DB with fallback user population
         const task = await Task.findById(lockedReminder.task)
           .populate('project', 'name')
-          .populate('assignee', 'name email notificationPreferences');
+          .populate('assignee', 'name email notificationPreferences')
+          .populate('createdBy', 'name email notificationPreferences')
+          .populate({
+            path: 'project',
+            populate: { path: 'owner', select: 'name email notificationPreferences' },
+          });
 
         // Validation 1: Task was deleted
         if (!task) {
@@ -253,11 +296,18 @@ async function processDueReminders() {
           continue;
         }
 
-        // Validation 3: Assignee missing
-        const assignee = task.assignee;
+        // Validation 3: Target user resolution (assignee -> createdBy -> project.owner)
+        const assignee = (task.assignee && task.assignee.email)
+          ? task.assignee
+          : (task.createdBy && task.createdBy.email)
+            ? task.createdBy
+            : (task.project?.owner && task.project.owner.email)
+              ? task.project.owner
+              : null;
+
         if (!assignee || !assignee.email) {
           lockedReminder.deliveryStatus = 'cancelled';
-          lockedReminder.errorDetails = 'Task has no assigned user';
+          lockedReminder.errorDetails = 'Task has no assigned user or creator email';
           await lockedReminder.save();
           skippedCount++;
           continue;
@@ -303,7 +353,7 @@ async function processDueReminders() {
           continue;
         }
 
-        // Send Email
+        // Send Email via Resend
         const emailResult = await sendDeadlineEmail({
           to: assignee.email,
           recipientName: assignee.name,
@@ -356,8 +406,11 @@ async function processDueReminders() {
         }
 
         processedCount++;
+        sentCount++;
       } catch (itemErr) {
         errorCount++;
+        processedCount++;
+        lastError = itemErr.message;
         lockedReminder.retryCount = (lockedReminder.retryCount || 0) + 1;
         lockedReminder.errorDetails = itemErr.message;
         
@@ -373,11 +426,18 @@ async function processDueReminders() {
     }
   } catch (err) {
     console.error('[DeadlineReminderService] Fatal loop error:', err);
+    lastError = err.message;
   } finally {
     isProcessing = false;
   }
 
-  return { processed: processedCount, sent: processedCount, skipped: skippedCount, errors: errorCount };
+  return {
+    processed: processedCount,
+    sent: sentCount,
+    skipped: skippedCount,
+    errors: errorCount,
+    lastError: lastError || null,
+  };
 }
 
 /**
@@ -385,19 +445,40 @@ async function processDueReminders() {
  * Ensures full resilience after server restarts or database restore
  */
 async function syncAllActiveTasks() {
+  const stats = {
+    totalActiveTasks: 0,
+    syncedTasks: 0,
+    skippedNoRecipient: 0,
+  };
+
   try {
     const tasks = await Task.find({
       status: { $ne: 'Completed' },
       dueDate: { $exists: true, $ne: null },
-      assignee: { $exists: true, $ne: null },
-    }).select('_id dueDate status assignee project priority title');
+    })
+      .populate('assignee', 'name email notificationPreferences')
+      .populate('createdBy', 'name email notificationPreferences')
+      .populate({
+        path: 'project',
+        select: 'name owner',
+        populate: { path: 'owner', select: 'name email notificationPreferences' },
+      });
+
+    stats.totalActiveTasks = tasks.length;
 
     for (const task of tasks) {
-      await syncTaskReminders(task);
+      const res = await syncTaskReminders(task);
+      if (res?.status === 'no_recipient') {
+        stats.skippedNoRecipient++;
+      } else {
+        stats.syncedTasks++;
+      }
     }
   } catch (err) {
     console.error('[DeadlineReminderService] Error syncing all active tasks:', err.message);
   }
+
+  return stats;
 }
 
 /**
